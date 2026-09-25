@@ -119,6 +119,11 @@ export function WorkspaceProvider({ userId, children }) {
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
 
+/** The workspace, or null outside one (a page rendered on its own, in a test). */
+export function useOptionalWorkspace() {
+  return useContext(WorkspaceContext);
+}
+
 export function useWorkspace() {
   const workspace = useContext(WorkspaceContext);
   if (workspace === null) throw new Error('useWorkspace() outside <WorkspaceProvider>');

@@ -101,6 +101,21 @@ describe('the signed-in shell', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('opens what the dashboard links to in a new tab, leaving the dashboard as it was', async () => {
+    renderApp();
+    await screen.findByRole('heading', { name: 'Översikt' });
+
+    fireEvent.click(screen.getByRole('link', { name: /Väntar på plock/ }));
+    expect(tabNames()).toEqual(['Översikt', 'Ordrar']);
+    expect(selected()).toBe('Ordrar');
+    expect(new URLSearchParams(window.location.search).get('f.status')).toBe('confirmed,allocated,picking,packed');
+
+    // Always a new tab: the dashboard's links are for opening lists beside it.
+    fireEvent.click(screen.getByRole('tab', { name: 'Översikt' }));
+    fireEvent.click(screen.getByRole('link', { name: /Väntar på plock/ }));
+    expect(tabNames()).toEqual(['Översikt', 'Ordrar', 'Ordrar']);
+  });
+
   it('comes back with its tabs after a reload', async () => {
     const first = renderApp();
     await screen.findByRole('heading', { name: 'Översikt' });

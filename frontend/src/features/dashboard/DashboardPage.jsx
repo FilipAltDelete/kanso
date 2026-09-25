@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useDashboard } from '../../api/dashboard.js';
+import { TabLink } from '../../app/workspace/TabLink.jsx';
 import { AWAITING_FULFILLMENT, ORDER_STATUSES } from '../../api/orders.js';
 import { Card, EmptyState, ErrorNotice } from '../../components/ui/primitives.jsx';
 import { cn } from '../../lib/utils.js';
@@ -11,7 +12,8 @@ const cardLink = 'block rounded-lg focus-visible:outline-2 focus-visible:outline
 /**
  * The operator's day at a glance. Every number is counted by the API
  * (GET /api/dashboard) for the browser's calendar day, refreshed every 30
- * seconds, and each one opens the list it counts.
+ * seconds, and each one opens the list it counts, in a new tab (TabLink),
+ * so the dashboard stays where it is.
  */
 export function DashboardPage() {
   const { t, locale } = useI18n();
@@ -45,16 +47,21 @@ export function DashboardPage() {
       {dashboard.error ? <ErrorNotice error={dashboard.error} /> : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {kpis.map(({ key, value, to, search, hash }) => (
-          <Link key={key} to={to} search={search} hash={hash} className={cardLink}>
-            <Card className="h-full p-4 hover:border-slate-300 hover:bg-slate-50">
-              <p className="text-sm text-slate-500">{t(key)}</p>
-              <p className={cn('mt-1 text-2xl font-semibold tabular-nums', value === undefined ? 'text-slate-400' : 'text-slate-900')}>
-                {value === undefined ? '—' : number.format(value)}
-              </p>
-            </Card>
-          </Link>
-        ))}
+        {kpis.map(({ key, value, to, search, hash }) => {
+          // The stock-out card jumps down this page; the others open their list in a new tab.
+          const Target = hash ? Link : TabLink;
+
+          return (
+            <Target key={key} to={to} search={search} hash={hash} className={cardLink}>
+              <Card className="h-full p-4 hover:border-slate-300 hover:bg-slate-50">
+                <p className="text-sm text-slate-500">{t(key)}</p>
+                <p className={cn('mt-1 text-2xl font-semibold tabular-nums', value === undefined ? 'text-slate-400' : 'text-slate-900')}>
+                  {value === undefined ? '—' : number.format(value)}
+                </p>
+              </Card>
+            </Target>
+          );
+        })}
       </div>
 
       {noOrders ? <EmptyState title={t('dashboard.emptyTitle')}>{t('dashboard.emptyBody')}</EmptyState> : null}
@@ -67,14 +74,14 @@ export function DashboardPage() {
           <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {ORDER_STATUSES.map((status) => (
               <li key={status}>
-                <Link
+                <TabLink
                   to="/orders"
                   search={{ 'f.status': status }}
                   className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
                 >
                   <StatusBadge status={status} />
                   <span className="text-sm font-medium tabular-nums">{number.format(data.ordersByStatus[status])}</span>
-                </Link>
+                </TabLink>
               </li>
             ))}
           </ul>
@@ -114,9 +121,9 @@ function StockOuts({ stockOuts, number }) {
                 <tr key={`${item.productId}-${item.locationId}`} className="border-b border-slate-100">
                   <td className="px-4 py-2 font-mono text-xs">{item.sku}</td>
                   <td className="px-4 py-2">
-                    <Link to="/products/$productId" params={{ productId: item.productId }} className="hover:underline">
+                    <TabLink to="/products/$productId" params={{ productId: item.productId }} className="hover:underline">
                       {item.productName}
-                    </Link>
+                    </TabLink>
                   </td>
                   <td className="px-4 py-2">{item.locationName}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{number.format(item.onHand)}</td>
