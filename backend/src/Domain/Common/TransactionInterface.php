@@ -20,4 +20,12 @@ interface TransactionInterface
      * @throws ConcurrentModification when another writer changed the same rows first
      */
     public function run(callable $work): mixed;
+
+    /**
+     * Lets go of everything read so far, between the transactions of a long
+     * batch (an import writing row by row), so each one costs the same as the
+     * first instead of more for every row before it. Entities read before
+     * are no longer tracked; read them again by id to change them.
+     */
+    public function forget(): void;
 }

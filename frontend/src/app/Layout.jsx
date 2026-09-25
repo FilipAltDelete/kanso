@@ -4,6 +4,7 @@ import {
   LogOut,
   MapPin,
   Package,
+  PackagePlus,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -36,7 +37,10 @@ const FOLDERS = [
   },
 ];
 
-const ADMIN_TOOLS = [{ href: '/products/import', labelKey: 'nav.importProducts', icon: Upload }];
+const ADMIN_TOOLS = [
+  { href: '/products/import', labelKey: 'nav.importProducts', icon: Upload },
+  { href: '/stock/import', labelKey: 'nav.importStock', icon: PackagePlus },
+];
 
 const HREFS = ['/', '/orders', '/customers', '/settings', ...FOLDERS.flatMap((folder) => folder.items.map((item) => item.href)), ...ADMIN_TOOLS.map((item) => item.href)];
 

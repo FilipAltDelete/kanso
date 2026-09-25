@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Plus } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { PackagePlus, Pencil, Plus } from 'lucide-react';
 import { useLocations } from '../../api/inventory.js';
 import { Button, ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
@@ -69,10 +70,19 @@ export function LocationsPage() {
           <p className="text-sm text-slate-500">{t('locations.subtitle')}</p>
         </div>
         {canEdit ? (
-          <Button onClick={() => setOpen('new')}>
-            <Plus className="size-4" aria-hidden="true" />
-            {t('locationForm.open')}
-          </Button>
+          <div className="flex gap-2">
+            <Link
+              to="/stock/import"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            >
+              <PackagePlus className="size-4" aria-hidden="true" />
+              {t('stockImport.open')}
+            </Link>
+            <Button onClick={() => setOpen('new')}>
+              <Plus className="size-4" aria-hidden="true" />
+              {t('locationForm.open')}
+            </Button>
+          </div>
         ) : null}
       </div>
       {locations.error ? <ErrorNotice error={locations.error} /> : null}

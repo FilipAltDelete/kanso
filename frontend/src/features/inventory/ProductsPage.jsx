@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { FileUp, Plus } from 'lucide-react';
+import { FileUp, PackagePlus, Plus } from 'lucide-react';
 import { useProducts } from '../../api/inventory.js';
 import { Button, ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
@@ -67,6 +67,13 @@ export function ProductsPage() {
             >
               <FileUp className="size-4" aria-hidden="true" />
               {t('import.open')}
+            </Link>
+            <Link
+              to="/stock/import"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            >
+              <PackagePlus className="size-4" aria-hidden="true" />
+              {t('stockImport.open')}
             </Link>
             <Button onClick={() => setCreating(true)}>
               <Plus className="size-4" aria-hidden="true" />
