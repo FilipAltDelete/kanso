@@ -246,6 +246,22 @@ final class OrderEditApiTest extends WebTestCase
         self::assertSame('ship', $shipped['events'][array_key_last($shipped['events'])]['transition']);
     }
 
+    public function testVoidingTheShipmentOfAnOrderFinishedByACancelReopensWhatWasNotCancelled(): void
+    {
+        $order = $this->confirmed([[$this->tee, 5]]);
+        $order = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 3]]]);
+        $shipped = $this->cancel($order, [[0, 2]]);
+        self::assertSame('shipped', $shipped['status']);
+
+        $reopened = $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/void', $order['id'], $shipped['shipments'][0]['id']), ['version' => $shipped['version']]);
+
+        self::assertSame(200, $this->responseStatus());
+        self::assertSame('confirmed', $reopened['status']);
+        self::assertSame([[5, 3, 0, 2]], array_map(static fn (array $line): array => [$line['quantity'], $line['reservedQuantity'], $line['shippedQuantity'], $line['cancelledQuantity']], $reopened['lines']), 'The cancelled two stay cancelled.');
+        self::assertSame([10, 3, 7], $this->stock($this->tee));
+        self::assertTrue($reopened['canEdit']);
+    }
+
     public function testNothingIsCancelledOnceTheOrderIsCancelled(): void
     {
         $order = $this->order([[$this->tee, 2]]);

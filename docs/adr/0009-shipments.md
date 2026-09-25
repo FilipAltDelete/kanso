@@ -19,7 +19,7 @@ Until now `ship` was a transition that took all of an order's reserved stock off
   - when nothing is left to ship, the order moves to `shipped` through the state machine, recorded as a `ship` transition.
 - **Where it can ship from:** any status in which the order holds stock — confirmed, allocated, picking, packed. Not every merchant records picking and packing, so `ship` is now allowed from all four. Not while on hold, and not before confirmation (409 `not_shippable`).
 - **`ship` is not a transition a person asks for.** `POST /orders/{id}/transitions` with `ship` is a 409 (`use_shipments`), and `availableTransitions` never lists it. The order detail says `canShip` instead.
-- **No cancel after a shipment.** Once part of an order has left, cancelling it is a partial cancel, which is its own roadmap item; until then `cancel` is refused and not offered.
+- **No cancel after a shipment.** Once part of an order has left, cancelling it is a partial cancel (`POST /api/orders/{id}/cancellations`, ADR-0011); the `cancel` transition is refused and not offered.
 - **Refusals:** more than a line has left is a 422 at `lines[i].quantity` (`exceeds_remaining`); an unknown line, the same line twice, or a line with nothing reserved (an order confirmed before reservations existed, `not_reserved`) is a 422; a stale version is a 409 (`stale_version`). Nothing is written in any of these cases.
 
 ## Consequences

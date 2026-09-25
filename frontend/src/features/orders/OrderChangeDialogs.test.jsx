@@ -61,7 +61,7 @@ describe('editing an order', () => {
     // 5 × 199.50 + 2 × 99.50
     expect(within(dialog).getByText('SEK 1,196.50')).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText('Email'), { target: { value: '' } });
-    fireEvent.change(within(dialog).getByLabelText('City', { selector: 'input' }), { target: { value: 'Lund' } });
+    fireEvent.change(within(dialog).getByLabelText(/^City/), { target: { value: 'Lund' } });
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
 
@@ -123,7 +123,7 @@ describe('editing an order', () => {
     expect((await within(dialog).findByRole('alert')).textContent).toContain('Someone changed this order');
   });
 
-  it('is not offered once picking has started, or to a viewer', async () => {
+  it('is not offered once picking has started', async () => {
     api.mockResolvedValue(confirmed({ status: 'picking', canEdit: false }));
     renderAt('/orders/o1');
     await screen.findByRole('table', { name: 'Lines' });
