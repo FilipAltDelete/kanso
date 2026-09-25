@@ -26,6 +26,7 @@ use Kanso\Core\Internal\Domain\Order\OrderQuery;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
 use Kanso\Core\Internal\Domain\Order\PaymentStatus;
+use Kanso\Core\Internal\Domain\Order\Shipment;
 use Kanso\Core\Internal\Domain\Order\ShipmentRefused;
 use Kanso\Core\Internal\Domain\Order\Transition;
 use Kanso\Core\Internal\Domain\Order\TransitionNotAllowed;
@@ -58,9 +59,14 @@ final class OrderService
     }
 
     /**
-     * @param array<string, mixed> $input the create request body
+     * `$annotate` runs on the new order, with the creation time, in the
+     * transaction that writes it: how an import sets the payment status, tags
+     * and a note through the order's own methods (ADR-0008).
+     *
+     * @param array<string, mixed>                             $input    the create request body
+     * @param (callable(Order, \DateTimeImmutable): void)|null $annotate
      */
-    public function create(array $input, Actor $actor): Order
+    public function create(array $input, Actor $actor, ?callable $annotate = null): Order
     {
         $draft = $this->draft($input);
 
@@ -79,7 +85,12 @@ final class OrderService
         );
 
         try {
-            $this->transaction->run(fn () => $this->orders->add($order));
+            $this->transaction->run(function () use ($order, $annotate, $now): void {
+                if (null !== $annotate) {
+                    $annotate($order, $now);
+                }
+                $this->orders->add($order);
+            });
         } catch (ConcurrentModification $e) {
             // The unique key on (channel, external reference): created by
             // someone else between the check in draft() and this write.
@@ -289,6 +300,9 @@ final class OrderService
         $check->throwIfInvalid();
         \assert(null !== $move && null !== $expected);
 
+        if (Transition::Reopen === $move) {
+            throw new Conflict('An order is reopened by voiding a shipment: POST /api/orders/{id}/shipments/{shipmentId}/void.', [['path' => 'transition', 'message' => 'Void the shipment instead.', 'code' => 'use_shipments']]);
+        }
         if (Transition::Ship === $move) {
             // Shipping is shipments: which lines, how many, with which
             // tracking number. The order moves to shipped when the last goes.
@@ -357,6 +371,13 @@ final class OrderService
         \assert(null !== $expected);
 
         $order = $this->get($id);
+        // A parcel cannot leave before the order was placed, or after now
+        // (a few minutes' grace for clocks that disagree).
+        if (null !== $shippedAt && $shippedAt > $this->clock->now()->modify('+5 minutes')) {
+            $check->violate('shippedAt', 'A shipment cannot have left in the future.', 'in_future');
+        } elseif (null !== $shippedAt && $shippedAt < $order->placedAt()) {
+            $check->violate('shippedAt', 'A shipment cannot have left before the order was placed.', 'before_placed');
+        }
         $lines = $this->shipmentLines($input['lines'] ?? null, $order, $check);
         $check->throwIfInvalid();
 
@@ -384,6 +405,89 @@ final class OrderService
         }
 
         return $order;
+    }
+
+    /**
+     * Fixes a shipment's carrier and tracking number. Changes no stock.
+     *
+     * @param array<string, mixed> $input `{version, carrier?, trackingNumber?}`; a field left out is kept, `null` clears it
+     */
+    public function correctShipment(string $id, string $shipmentId, array $input, Actor $actor): Order
+    {
+        $check = new OrderInput();
+        $expected = $check->integer($input['version'] ?? null, 'version', 1, \PHP_INT_MAX);
+        $carrier = \array_key_exists('carrier', $input) ? $check->text($input['carrier'], 'carrier', 64, false) : false;
+        $tracking = \array_key_exists('trackingNumber', $input) ? $check->text($input['trackingNumber'], 'trackingNumber', 128, false) : false;
+        $check->throwIfInvalid();
+        \assert(null !== $expected);
+
+        [$order, $shipment] = $this->orderAndShipment($id, $shipmentId, $expected);
+
+        try {
+            $this->transaction->run(function () use ($order, $shipment, $carrier, $tracking, $actor): void {
+                try {
+                    $order->correctShipment(
+                        $shipment,
+                        false === $carrier ? $shipment->carrier() : $carrier,
+                        false === $tracking ? $shipment->trackingNumber() : $tracking,
+                        $actor,
+                        $this->clock->now(),
+                    );
+                } catch (ShipmentRefused $e) {
+                    throw new Conflict($e->getMessage(), [['path' => 'shipment', 'message' => $e->getMessage(), 'code' => $e->reason]]);
+                }
+            });
+        } catch (ConcurrentModification) {
+            throw $this->stale($order);
+        }
+
+        return $order;
+    }
+
+    /**
+     * Takes back a shipment recorded by mistake: its units go back on hand and
+     * are reserved for the order again, and a shipped order is reopened — in
+     * one transaction, checked against the order version the caller saw.
+     *
+     * @param array<string, mixed> $input `{version, reason?}`
+     */
+    public function voidShipment(string $id, string $shipmentId, array $input, Actor $actor): Order
+    {
+        $check = new OrderInput();
+        $expected = $check->integer($input['version'] ?? null, 'version', 1, \PHP_INT_MAX);
+        $reason = $check->text($input['reason'] ?? null, 'reason', 500, false);
+        $check->throwIfInvalid();
+        \assert(null !== $expected);
+
+        [$order, $shipment] = $this->orderAndShipment($id, $shipmentId, $expected);
+
+        $now = $this->clock->now();
+        try {
+            $this->transaction->run(function () use ($order, $shipment, $reason, $actor, $now): void {
+                try {
+                    $order->voidShipment($shipment, $reason, $actor, $now);
+                } catch (ShipmentRefused $e) {
+                    throw new Conflict($e->getMessage(), [['path' => 'shipment', 'message' => $e->getMessage(), 'code' => $e->reason]]);
+                }
+                $this->stock->unship($order, $shipment, $actor, $now);
+            });
+        } catch (ConcurrentModification) {
+            throw $this->stale($order);
+        }
+
+        return $order;
+    }
+
+    /** @return array{Order, Shipment} */
+    private function orderAndShipment(string $id, string $shipmentId, int $expected): array
+    {
+        $order = $this->get($id);
+        $shipment = $order->shipmentById($shipmentId) ?? throw new NotFound(\sprintf('Order %s has no shipment "%s".', $order->number(), $shipmentId));
+        if ($order->version() !== $expected) {
+            throw $this->stale($order);
+        }
+
+        return [$order, $shipment];
     }
 
     /**
@@ -507,6 +611,8 @@ final class OrderService
         $search = $check->text($parameters['q'] ?? null, 'q', self::MAX_SEARCH, false) ?? '';
         $placedFrom = $check->instant($parameters['placedFrom'] ?? null, 'placedFrom');
         $placedBefore = $check->instant($parameters['placedBefore'] ?? null, 'placedBefore');
+        $shippedFrom = $check->instant($parameters['shippedFrom'] ?? null, 'shippedFrom');
+        $shippedBefore = $check->instant($parameters['shippedBefore'] ?? null, 'shippedBefore');
         $customerId = $check->uuid($parameters['customer'] ?? null, 'customer');
 
         $check->throwIfInvalid();
@@ -523,6 +629,8 @@ final class OrderService
             customerId: $customerId,
             tags: $this->list($parameters['tag'] ?? null),
             paymentStatuses: $paymentStatuses,
+            shippedFrom: $shippedFrom,
+            shippedBefore: $shippedBefore,
         ));
     }
 

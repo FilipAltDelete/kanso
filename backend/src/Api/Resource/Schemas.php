@@ -77,6 +77,10 @@ final class Schemas
             'trackingNumber' => ['type' => ['string', 'null']],
             'shippedAt' => ['type' => 'string', 'format' => 'date-time'],
             'actor' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+            'voidedAt' => ['type' => ['string', 'null'], 'format' => 'date-time', 'description' => 'Set when the shipment was taken back; it no longer counts'],
+            'voidedBy' => ['type' => ['object', 'null'], 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+            'voidReason' => ['type' => ['string', 'null']],
+            'voidable' => ['type' => 'boolean', 'description' => 'Whether it can be voided now'],
             'lines' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
                 'lineId' => ['type' => 'string', 'format' => 'uuid'],
                 'position' => ['type' => 'integer'],
@@ -100,7 +104,7 @@ final class Schemas
         'type' => 'object',
         'properties' => [
             'id' => ['type' => 'string', 'format' => 'uuid'],
-            'type' => ['type' => 'string', 'enum' => ['created', 'transition', 'shipment', 'note', 'tags_changed', 'payment_status_changed', 'edited', 'lines_cancelled']],
+            'type' => ['type' => 'string', 'enum' => ['created', 'transition', 'shipment', 'shipment_corrected', 'shipment_voided', 'note', 'tags_changed', 'payment_status_changed', 'edited', 'lines_cancelled']],
             'transition' => ['type' => ['string', 'null'], 'description' => 'Set on a transition event'],
             'actor' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']]],
             'before' => ['type' => ['object', 'null'], 'description' => 'What changed, before: {status, heldFrom}, {tags}, {paymentStatus}; an edit has only the parts it changed ({lines, total, customerName, customerEmail, shippingAddress, billingAddress}); a partial cancel {lines, total}'],

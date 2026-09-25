@@ -43,6 +43,14 @@ class Document
     #[ORM\Column(length: 8)]
     private string $locale;
 
+    /** A packing slip for one shipment rather than the whole order; null otherwise. */
+    #[ORM\Column(name: 'shipment_id', type: UuidType::NAME, nullable: true)]
+    private ?Uuid $shipmentId;
+
+    /** Which of the order's shipments it is (1, 2, …), for the filename. */
+    #[ORM\Column(name: 'shipment_number', type: 'integer', nullable: true)]
+    private ?int $shipmentNumber;
+
     #[ORM\Column(length: 16, enumType: DocumentStatus::class)]
     private DocumentStatus $status = DocumentStatus::Queued;
 
@@ -75,6 +83,8 @@ class Document
         string $locale,
         Actor $requestedBy,
         \DateTimeImmutable $now,
+        ?Uuid $shipmentId = null,
+        ?int $shipmentNumber = null,
     ) {
         $this->id = Uuid::v7();
         $this->type = $type;
@@ -82,6 +92,8 @@ class Document
         $this->orderNumber = $orderNumber;
         $this->orderVersion = $orderVersion;
         $this->locale = $locale;
+        $this->shipmentId = $shipmentId;
+        $this->shipmentNumber = $shipmentNumber;
         $this->requestedById = $requestedBy->id;
         $this->requestedByName = $requestedBy->name;
         $this->createdAt = $now;
@@ -116,10 +128,20 @@ class Document
         return \sprintf('documents/%s.pdf', $this->id);
     }
 
-    /** What the browser saves it as, e.g. `pick-list-10001.pdf`. */
+    /** What the browser saves it as, e.g. `pick-list-10001.pdf`, or `packing-slip-10001-2.pdf` for the second shipment. */
     public function filename(): string
     {
-        return \sprintf('%s-%s.pdf', str_replace('_', '-', $this->type->value), preg_replace('/[^A-Za-z0-9-]/', '', $this->orderNumber));
+        return \sprintf(
+            '%s-%s%s.pdf',
+            str_replace('_', '-', $this->type->value),
+            preg_replace('/[^A-Za-z0-9-]/', '', $this->orderNumber),
+            null === $this->shipmentNumber ? '' : '-'.$this->shipmentNumber,
+        );
+    }
+
+    public function shipmentId(): ?Uuid
+    {
+        return $this->shipmentId;
     }
 
     public function id(): Uuid

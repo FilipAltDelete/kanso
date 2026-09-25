@@ -13,4 +13,7 @@ final class DocumentRequestInput
 
     #[ApiProperty(description: 'The language the document is printed in. Default en.', schema: ['type' => 'string', 'enum' => ['sv', 'en']])]
     public mixed $locale = null;
+
+    #[ApiProperty(description: 'A packing slip for one shipment: what went in that parcel, with its carrier and tracking number. Default: the whole order.', schema: ['type' => 'string', 'format' => 'uuid'])]
+    public mixed $shipmentId = null;
 }

@@ -20,7 +20,7 @@ export function BulkActionBar({ actions, ids, rows, onClear }) {
       <span className="text-sm font-medium text-slate-900">{t('table.selected', { count })}</span>
       <div className="flex flex-wrap gap-2">
         {actions.map(({ id, label, icon: Icon, variant = 'outline', onClick }) => (
-          <Button key={id} size="sm" variant={variant} onClick={() => onClick({ ids, rows, clear: onClear })}>
+          <Button key={id} data-bulk-action={id} size="sm" variant={variant} onClick={() => onClick({ ids, rows, clear: onClear })}>
             {Icon ? <Icon className="size-3.5" aria-hidden="true" /> : null}
             {label}
           </Button>

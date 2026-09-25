@@ -44,6 +44,14 @@ describe('the order list query', () => {
     expect(query.get('placedBefore')).toBe(new Date(2026, 9, 1).toISOString());
   });
 
+  it('sends a ship-date range the same way', () => {
+    const query = new URLSearchParams(orderListQuery({ ...view, columnFilters: [{ id: 'shippedAt', value: '2026-09-26..2026-09-26' }] }));
+
+    expect(query.get('shippedFrom')).toBe(new Date(2026, 8, 26).toISOString());
+    expect(query.get('shippedBefore')).toBe(new Date(2026, 8, 27).toISOString());
+    expect(query.has('placedFrom')).toBe(false);
+  });
+
   it('allows an open-ended range', () => {
     const query = new URLSearchParams(orderListQuery({ ...view, columnFilters: [{ id: 'placedAt', value: '..2026-09-30' }] }));
 

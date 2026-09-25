@@ -15,4 +15,6 @@ enum MovementType: string
     case Release = 'release';
     /** An order was shipped: its reserved stock left on hand. */
     case Shipment = 'shipment';
+    /** A shipment was voided: what it took is back on hand, reserved for its order again. */
+    case ShipmentVoided = 'shipment_voided';
 }

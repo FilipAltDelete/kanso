@@ -118,6 +118,40 @@ final class DocumentApiTest extends WebTestCase
         self::assertSame($order['version'] + 1, $second['orderVersion']);
     }
 
+    public function testAPackingSlipCanBeForOneShipment(): void
+    {
+        $order = $this->createOrder();
+        $this->request('POST', '/api/orders/'.$order['id'].'/transitions', $this->operator, ['transition' => 'confirm', 'version' => $order['version']]);
+        $order = $this->json();
+        $this->request('POST', '/api/orders/'.$order['id'].'/shipments', $this->operator, ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][1]['id'], 'quantity' => 2]], 'carrier' => 'PostNord', 'trackingNumber' => '00370712345']);
+        self::assertResponseStatusCodeSame(201);
+        $order = $this->json();
+        $shipmentId = $order['shipments'][0]['id'];
+
+        $slip = $this->requestDocument($order['id'], ['type' => 'packing_slip', 'shipmentId' => $shipmentId]);
+        self::assertSame($shipmentId, $slip['shipmentId']);
+        self::assertSame('packing-slip-'.$order['number'].'-1.pdf', $slip['filename']);
+
+        $whole = $this->requestDocument($order['id'], ['type' => 'packing_slip']);
+        self::assertNotSame($slip['id'], $whole['id'], 'The whole order and one parcel are different documents.');
+        self::assertNull($whole['shipmentId']);
+        self::assertSame($slip['id'], $this->requestDocument($order['id'], ['type' => 'packing_slip', 'shipmentId' => $shipmentId])['id'], 'The same parcel is not rendered twice.');
+
+        self::assertSame(2, $this->work(), 'Two documents: one parcel, and the whole order.');
+        self::assertSame('done', $this->getDocument($slip['id'])['status']);
+    }
+
+    public function testOnlyAPackingSlipCanBeForAShipmentOfThisOrder(): void
+    {
+        $order = $this->createOrder();
+
+        $this->request('POST', '/api/orders/'.$order['id'].'/documents', $this->operator, ['type' => 'pick_list', 'shipmentId' => '0199aaaa-0000-7000-8000-000000000001']);
+        self::assertResponseStatusCodeSame(422);
+        $this->request('POST', '/api/orders/'.$order['id'].'/documents', $this->operator, ['type' => 'packing_slip', 'shipmentId' => '0199aaaa-0000-7000-8000-000000000001']);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('unknown_shipment', $this->json()['violations'][0]['code']);
+    }
+
     public function testAViewerMayPrint(): void
     {
         $order = $this->createOrder();

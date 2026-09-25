@@ -18,6 +18,8 @@ final class OrderImportApiTest extends WebTestCase
 
     private const string HEADER = "orderReference;customerName;customerEmail;shippingLine1;shippingPostalCode;shippingCity;shippingCountry;sku;lineName;quantity;unitPrice\n";
 
+    private const string ANNOTATED = "orderReference;customerName;shippingLine1;shippingPostalCode;shippingCity;shippingCountry;sku;quantity;unitPrice;paymentStatus;tags;note\n";
+
     private KernelBrowser $client;
 
     protected function setUp(): void
@@ -102,6 +104,72 @@ final class OrderImportApiTest extends WebTestCase
 
         $import = $this->upload(self::HEADER."web-9;Anna;;Storgatan 1;111 22;Stockholm;SE;TEE-1;;1;1\n", dryRun: true);
         self::assertSame(1, $import['existing'], 'References compare without case, like the column.');
+    }
+
+    public function testPaymentStatusTagsAndANoteAreSetOnTheNewOrderWithTheirEvents(): void
+    {
+        $csv = self::ANNOTATED
+            ."WEB-1;Anna;Storgatan 1;111 22;Stockholm;SE;TEE-1;1;100;Paid;VIP | gift wrap|vip|;Leave at the door\n"
+            ."WEB-1;;;;;;MUG-1;1;50;;;\n"
+            ."WEB-2;Bo;Kungsgatan 2;411 19;Göteborg;SE;MUG-1;1;50;;;\n";
+
+        self::assertSame([2, 0], [($r = $this->upload($csv))['created'], $r['failed']]);
+
+        $order = $this->orderByReference('WEB-1');
+        self::assertSame('paid', $order['paymentStatus']);
+        self::assertSame(['gift wrap', 'VIP'], $order['tags'], 'split on "|", trimmed, the same tag once');
+        self::assertSame(1, $order['version']);
+        self::assertSame(
+            [
+                ['created', null, null],
+                ['payment_status_changed', ['paymentStatus' => 'unpaid'], ['paymentStatus' => 'paid']],
+                ['tags_changed', ['tags' => []], ['tags' => ['gift wrap', 'VIP']]],
+                ['note', null, ['note' => 'Leave at the door']],
+            ],
+            array_map(static fn (array $event): array => [$event['type'], $event['before'], 'created' === $event['type'] ? null : $event['after']], $order['events']),
+        );
+
+        $plain = $this->orderByReference('WEB-2');
+        self::assertSame(['unpaid', []], [$plain['paymentStatus'], $plain['tags']]);
+        self::assertSame(['created'], array_column($plain['events'], 'type'), 'empty columns set nothing');
+
+        $again = $this->upload(str_replace('Leave at the door', 'Changed note', str_replace('Paid', 'refunded', $csv)));
+        self::assertSame([0, 2, 0], [$again['created'], $again['existing'], $again['failed']]);
+        $order = $this->orderByReference('WEB-1');
+        self::assertSame(['paid', 4], [$order['paymentStatus'], \count($order['events'])], 'an import never edits an existing order');
+    }
+
+    public function testBadPaymentStatusTagsAndNotesAreReportedInThePreviewAndSkipTheOrder(): void
+    {
+        $tooMany = implode('|', array_map(static fn (int $i): string => 'tag'.$i, range(1, 21)));
+        $csv = self::ANNOTATED
+            ."WEB-1;Anna;Storgatan 1;111 22;Stockholm;SE;TEE-1;1;100;free;;\n"                        // row 2
+            ."WEB-2;Bo;Kungsgatan 2;411 19;Göteborg;SE;TEE-1;1;100;;\"a,b|ok\";\n"                  // row 3
+            ."WEB-3;Cia;Vägen 3;123 45;Malmö;SE;TEE-1;1;100;;{$tooMany};\n"                          // row 4
+            .'WEB-4;Dan;Vägen 3;123 45;Malmö;SE;TEE-1;1;100;;;'.str_repeat('x', 2001)."\n"          // row 5
+            ."WEB-5;Eva;Gatan 4;123 45;Lund;SE;TEE-1;1;100;paid;a|b;Hi\n"                           // row 6
+            ."WEB-5;;;;;;MUG-1;1;50;refunded;b|a;Hello\n"                                           // row 7: disagrees
+            ."WEB-6;Fia;Gatan 6;123 45;Lund;SE;TEE-1;1;100;partially refunded;x;\n";                // row 8: fine
+
+        foreach ([true, false] as $dryRun) {
+            $result = $this->upload($csv, $dryRun);
+            self::assertSame([6, 1, 5], [$result['orders'], $result['created'], $result['failed']]);
+            self::assertSame(
+                [
+                    [2, 'WEB-1', 'paymentStatus', 'unknown_payment_status'],
+                    [3, 'WEB-2', 'tags', 'tag'],
+                    [4, 'WEB-3', 'tags', 'too_many_tags'],
+                    [5, 'WEB-4', 'note', 'too_long'],
+                    [7, 'WEB-5', 'paymentStatus', 'inconsistent'],
+                    [7, 'WEB-5', 'tags', 'inconsistent'],
+                    [7, 'WEB-5', 'note', 'inconsistent'],
+                ],
+                array_map(static fn (array $error): array => [$error['row'], $error['reference'], $error['field'], $error['code']], $result['errors']),
+            );
+        }
+
+        self::assertSame(1, $this->api('GET', '/api/orders')['totalItems']);
+        self::assertSame('partially_refunded', $this->orderByReference('WEB-6')['paymentStatus']);
     }
 
     public function testAViewerCannotImport(): void

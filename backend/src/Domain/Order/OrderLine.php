@@ -225,6 +225,16 @@ class OrderLine
         $this->shippedQuantity += $units;
     }
 
+    /** A voided shipment's units: not shipped after all, reserved again. */
+    public function markUnshipped(int $units): void
+    {
+        if ($units < 1 || $units > $this->shippedQuantity) {
+            throw new \LogicException(\sprintf('Line %d has %d shipped; cannot unship %d.', $this->position, $this->shippedQuantity, $units));
+        }
+        $this->shippedQuantity -= $units;
+        $this->reservedQuantity += $units;
+    }
+
     public function skuCode(): string
     {
         return $this->skuCode;

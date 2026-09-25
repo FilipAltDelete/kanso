@@ -25,6 +25,14 @@
                     <dd>{{ order.placedAt }}</dd>
                     <dt>{{ labels.customer }}</dt>
                     <dd>{{ order.customerName }}{% if order.customerEmail %}<br>{{ order.customerEmail }}{% endif %}</dd>
+                    {% if shipment %}
+                    <dt>{{ labels.shipment }}</dt>
+                    <dd><strong>{{ shipment.number }}</strong> · {{ labels.shipped }} {{ shipment.shippedAt }}</dd>
+                    {% if shipment.carrier or shipment.trackingNumber %}
+                    <dt>{{ labels.tracking_number }}</dt>
+                    <dd>{{ shipment.carrier }} {{ shipment.trackingNumber }}</dd>
+                    {% endif %}
+                    {% endif %}
                 </dl>
             </td>
         </tr>

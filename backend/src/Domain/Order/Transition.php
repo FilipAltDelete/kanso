@@ -16,6 +16,8 @@ enum Transition: string
     case Cancel = 'cancel';
     case Hold = 'hold';
     case Release = 'release';
+    /** A shipped order back to where it shipped from, because a shipment was voided. Applied by Order::voidShipment(), never asked for. */
+    case Reopen = 'reopen';
 
     /** @return list<string> */
     public static function values(): array

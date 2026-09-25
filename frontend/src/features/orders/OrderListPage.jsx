@@ -7,6 +7,7 @@ import { DataTable, useUrlView } from '../../components/ui/table/index.js';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
 import { BulkTagDialog } from './BulkTagDialog.jsx';
+import { useOrderListShortcuts } from './orderShortcuts.js';
 import { PaymentBadge, StatusBadge, TagList, useCanOperate, useDateTime } from './shared.jsx';
 
 const DEFAULTS = { sorting: [{ id: 'placedAt', desc: true }] };
@@ -28,6 +29,7 @@ export function OrderListPage() {
   // The bulk tag dialog: { mode: 'add' | 'remove', ids, clear } while open.
   const [tagging, setTagging] = useState(null);
   const [notice, setNotice] = useState('');
+  useOrderListShortcuts({ canOperate, onNothingSelected: () => setNotice(t('shortcuts.orders.selectFirst')) });
 
   const columns = useMemo(
     () => [
@@ -48,6 +50,14 @@ export function OrderListPage() {
         meta: { filter: { type: 'dateRange' } },
         cell: ({ getValue }) => <time dateTime={getValue()}>{dateTime(getValue())}</time>,
       },
+      {
+        // Filter only: an order can ship in several parcels on several days.
+        id: 'shippedAt',
+        accessorFn: () => null,
+        header: t('order.shippedAt'),
+        enableSorting: false,
+        meta: { filter: { type: 'dateRange' }, hidden: true },
+      },
       { id: 'customerName', accessorFn: (order) => order.customer.name, header: t('order.customer') },
       {
         id: 'channel',
@@ -62,12 +72,11 @@ export function OrderListPage() {
         accessorKey: 'status',
         header: t('order.status'),
         meta: {
+          // Several statuses at once: the API takes a comma-separated list.
           filter: {
-            options: [
-              // Several statuses at once: the API takes a comma-separated list.
-              { value: AWAITING_FULFILLMENT.join(','), label: t('kpi.awaitingFulfillment') },
-              ...ORDER_STATUSES.map((status) => ({ value: status, label: t(`orderStatus.${status}`) })),
-            ],
+            type: 'multi',
+            presets: [{ value: AWAITING_FULFILLMENT.join(','), label: t('kpi.awaitingFulfillment') }],
+            options: ORDER_STATUSES.map((status) => ({ value: status, label: t(`orderStatus.${status}`) })),
           },
         },
         cell: ({ getValue }) => <StatusBadge status={getValue()} />,
@@ -85,7 +94,8 @@ export function OrderListPage() {
         accessorFn: (order) => order.tags.join(', '),
         header: t('order.tags'),
         enableSorting: false,
-        meta: { filter: { options: (tags.data ?? []).map(({ name }) => ({ value: name, label: name })) } },
+        // Orders with any of the chosen tags (`tag=a,b`).
+        meta: { filter: { type: 'multi', options: (tags.data ?? []).map(({ name }) => ({ value: name, label: name })) } },
         cell: ({ row }) => <TagList tags={row.original.tags} />,
       },
       { id: 'lineCount', accessorKey: 'lineCount', header: t('order.lines'), enableSorting: false, meta: { align: 'end' } },
@@ -112,7 +122,7 @@ export function OrderListPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{t('orders.title')}</h1>
@@ -146,6 +156,7 @@ export function OrderListPage() {
 
       <DataTable
         {...urlView}
+        fill
         manual
         label={t('orders.title')}
         data={orders.data?.member ?? []}

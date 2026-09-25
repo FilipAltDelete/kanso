@@ -80,6 +80,10 @@ final class OrderPresenter
                 'trackingNumber' => $shipment->trackingNumber(),
                 'shippedAt' => $shipment->shippedAt()->format(\DATE_ATOM),
                 'actor' => ['id' => $shipment->actor()->id, 'name' => $shipment->actor()->name],
+                'voidedAt' => $shipment->voidedAt()?->format(\DATE_ATOM),
+                'voidedBy' => null === $shipment->voidedBy() ? null : ['id' => $shipment->voidedBy()->id, 'name' => $shipment->voidedBy()->name],
+                'voidReason' => $shipment->voidReason(),
+                'voidable' => $order->canVoid($shipment),
                 'lines' => array_map(static fn (ShipmentLine $line): array => [
                     'lineId' => (string) $line->orderLine()->id(),
                     'position' => $line->orderLine()->position(),

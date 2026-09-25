@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { ArrowLeft, PackageX, Pencil, Truck } from 'lucide-react';
-import { useOrder, useTransitionOrder } from '../../api/orders.js';
-import { Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
+import { useCorrectShipment, useOrder, useTransitionOrder, useVoidShipment } from '../../api/orders.js';
+import { Badge, Button, Card, ErrorNotice, Input, Spinner } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
 import { CancelItemsDialog } from './CancelItemsDialog.jsx';
 import { EditOrderDialog } from './EditOrderDialog.jsx';
 import { NoteForm, PaymentCard, TagsCard } from './OrderAnnotations.jsx';
-import { PrintDocuments } from './PrintDocuments.jsx';
+import { useOrderDetailShortcuts } from './orderShortcuts.js';
+import { PrintDocument, PrintDocuments } from './PrintDocuments.jsx';
 import { ShipDialog } from './ShipDialog.jsx';
 import { StatusBadge, useCanOperate, useDateTime } from './shared.jsx';
 
@@ -49,6 +50,7 @@ function OrderDetail({ order }) {
   const dateTime = useDateTime();
   const money = (minor) => formatMoney(minor, order.currency, locale);
   const anyCancelled = order.lines.some((line) => line.cancelledQuantity > 0);
+  useOrderDetailShortcuts();
 
   return (
     <div className="space-y-6">
@@ -136,7 +138,7 @@ function OrderDetail({ order }) {
         </table>
       </Card>
 
-      <Shipments shipments={order.shipments} />
+      <Shipments order={order} />
 
       <section aria-labelledby="order-timeline" className="space-y-4">
         <h2 id="order-timeline" className="text-sm font-semibold text-slate-900">
@@ -197,6 +199,7 @@ function Transitions({ order }) {
               size="sm"
               variant={CONFIRM_FIRST.has(name) ? 'outline' : name === order.availableTransitions[0] ? 'default' : 'outline'}
               disabled={transition.isPending}
+              data-shortcut={name === order.availableTransitions[0] && !CONFIRM_FIRST.has(name) ? 'advance' : undefined}
               onClick={() => (CONFIRM_FIRST.has(name) ? setConfirming(name) : run(name))}
             >
               {t(`orderTransition.${name}`)}
@@ -243,6 +246,13 @@ function useDescribeEvent() {
         return t('orderEvent.shipment', {
           units: (event.after?.lines ?? []).reduce((sum, line) => sum + (line.quantity ?? 0), 0),
           tracking: [event.after?.carrier, event.after?.trackingNumber].filter(Boolean).join(' ') || t('shipment.noTracking'),
+        });
+      case 'shipment_voided':
+        return t('orderEvent.shipmentVoided', { units: (event.after?.lines ?? []).reduce((sum, line) => sum + (line.quantity ?? 0), 0) });
+      case 'shipment_corrected':
+        return t('orderEvent.shipmentCorrected', {
+          before: [event.before?.carrier, event.before?.trackingNumber].filter(Boolean).join(' ') || '—',
+          after: [event.after?.carrier, event.after?.trackingNumber].filter(Boolean).join(' ') || '—',
         });
       case 'note':
         return t('orderEvent.note');
@@ -324,7 +334,7 @@ function ShipAction({ order }) {
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button size="sm" data-shortcut="ship" onClick={() => setOpen(true)}>
         <Truck className="size-4" aria-hidden="true" />
         {t('ship.open')}
       </Button>
@@ -344,7 +354,7 @@ function ChangeActions({ order }) {
   return (
     <>
       {order.canEdit ? (
-        <Button size="sm" variant="outline" onClick={() => setOpen('edit')}>
+        <Button size="sm" variant="outline" data-shortcut="edit" onClick={() => setOpen('edit')}>
           <Pencil className="size-4" aria-hidden="true" />
           {t('orderEdit.open')}
         </Button>
@@ -361,10 +371,10 @@ function ChangeActions({ order }) {
   );
 }
 
-/** What has left, parcel by parcel. */
-function Shipments({ shipments }) {
+/** What has left, parcel by parcel; a voided one stays listed, struck through. */
+function Shipments({ order }) {
   const { t } = useI18n();
-  const dateTime = useDateTime();
+  const shipments = order.shipments;
 
   if (shipments.length === 0) return null;
 
@@ -376,21 +386,157 @@ function Shipments({ shipments }) {
       <ul className="space-y-2">
         {[...shipments].reverse().map((shipment) => (
           <li key={shipment.id}>
-            <Card className="p-3 text-sm">
-              <p className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-medium">{shipment.carrier ?? t('shipment.noCarrier')}</span>
-                {shipment.trackingNumber ? <span className="font-mono">{shipment.trackingNumber}</span> : <span className="text-slate-500">{t('shipment.noTracking')}</span>}
-              </p>
-              <p className="text-slate-700">
-                {shipment.lines.map((line) => t('shipment.line', { quantity: line.quantity, sku: line.sku })).join(', ')}
-              </p>
-              <p className="text-xs text-slate-500">
-                {t('shipment.from', { location: shipment.location.code })} · {shipment.actor.name} · <time dateTime={shipment.shippedAt}>{dateTime(shipment.shippedAt)}</time>
-              </p>
-            </Card>
+            <ShipmentCard order={order} shipment={shipment} number={shipments.indexOf(shipment) + 1} />
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+function ShipmentCard({ order, shipment, number }) {
+  const { t } = useI18n();
+  const dateTime = useDateTime();
+  const canOperate = useCanOperate();
+  const [mode, setMode] = useState(null);
+  const voided = Boolean(shipment.voidedAt);
+
+  return (
+    <Card className={voided ? 'p-3 text-sm text-slate-500' : 'p-3 text-sm'}>
+      <p className="flex flex-wrap items-baseline gap-x-2">
+        <span className="text-xs text-slate-500">{t('shipment.number', { number })}</span>
+        <span className={voided ? 'font-medium line-through' : 'font-medium'}>{shipment.carrier ?? t('shipment.noCarrier')}</span>
+        {shipment.trackingNumber ? (
+          <span className={voided ? 'font-mono line-through' : 'font-mono'}>{shipment.trackingNumber}</span>
+        ) : (
+          <span className="text-slate-500">{t('shipment.noTracking')}</span>
+        )}
+        {voided ? <Badge tone="amber">{t('shipment.voided')}</Badge> : null}
+      </p>
+      <p className={voided ? 'line-through' : 'text-slate-700'}>
+        {shipment.lines.map((line) => t('shipment.line', { quantity: line.quantity, sku: line.sku })).join(', ')}
+      </p>
+      <p className="text-xs text-slate-500">
+        {t('shipment.from', { location: shipment.location.code })} · {shipment.actor.name} · <time dateTime={shipment.shippedAt}>{dateTime(shipment.shippedAt)}</time>
+      </p>
+      {voided ? (
+        <p className="text-xs text-slate-500">
+          {t('shipment.voidedBy', { name: shipment.voidedBy?.name ?? '' })} · <time dateTime={shipment.voidedAt}>{dateTime(shipment.voidedAt)}</time>
+          {shipment.voidReason ? <> · {shipment.voidReason}</> : null}
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <PrintDocument order={order} type="packing_slip" shipmentId={shipment.id} label={t('shipment.packingSlip')} />
+          {canOperate && mode === null ? (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setMode('correct')}>
+                {t('shipment.correct')}
+              </Button>
+              {shipment.voidable ? (
+                <Button size="sm" variant="ghost" onClick={() => setMode('void')}>
+                  {t('shipment.void')}
+                </Button>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      )}
+      {mode === 'correct' ? <CorrectShipment order={order} shipment={shipment} onDone={() => setMode(null)} /> : null}
+      {mode === 'void' ? <VoidShipment order={order} shipment={shipment} onDone={() => setMode(null)} /> : null}
+    </Card>
+  );
+}
+
+/** Carrier and tracking number, typed again. Moves no stock. */
+function CorrectShipment({ order, shipment, onDone }) {
+  const { t } = useI18n();
+  const correct = useCorrectShipment(order.id);
+  const [carrier, setCarrier] = useState(shipment.carrier ?? '');
+  const [tracking, setTracking] = useState(shipment.trackingNumber ?? '');
+  const carrierId = useId();
+  const trackingId = useId();
+
+  function submit(event) {
+    event.preventDefault();
+    correct.mutate(
+      { shipmentId: shipment.id, version: order.version, carrier: carrier.trim() || null, trackingNumber: tracking.trim() || null },
+      { onSuccess: onDone },
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 grid gap-2 border-t border-slate-200 pt-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <div>
+        <label htmlFor={carrierId} className="mb-1 block text-xs font-medium">
+          {t('ship.carrier')}
+        </label>
+        <Input id={carrierId} maxLength={64} value={carrier} onChange={(event) => setCarrier(event.target.value)} />
+      </div>
+      <div>
+        <label htmlFor={trackingId} className="mb-1 block text-xs font-medium">
+          {t('ship.trackingNumber')}
+        </label>
+        <Input id={trackingId} maxLength={128} className="font-mono" value={tracking} onChange={(event) => setTracking(event.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={correct.isPending}>
+          {t('shipment.saveCorrection')}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          {t('common.cancel')}
+        </Button>
+      </div>
+      {correct.error ? (
+        <div className="sm:col-span-3">
+          <ShipmentError error={correct.error} />
+        </div>
+      ) : null}
+    </form>
+  );
+}
+
+/** Taking back a shipment recorded by mistake; asks once, with an optional reason. */
+function VoidShipment({ order, shipment, onDone }) {
+  const { t } = useI18n();
+  const voidShipment = useVoidShipment(order.id);
+  const [reason, setReason] = useState('');
+  const reasonId = useId();
+
+  function submit(event) {
+    event.preventDefault();
+    voidShipment.mutate({ shipmentId: shipment.id, version: order.version, ...(reason.trim() ? { reason: reason.trim() } : {}) }, { onSuccess: onDone });
+  }
+
+  return (
+    <form onSubmit={submit} role="group" aria-label={t('shipment.void')} className="mt-3 space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
+      <p className="text-sm text-red-800">{t(order.status === 'shipped' ? 'shipment.voidConfirmReopens' : 'shipment.voidConfirm')}</p>
+      <div>
+        <label htmlFor={reasonId} className="mb-1 block text-xs font-medium text-red-900">
+          {t('shipment.voidReason')}
+        </label>
+        <Input id={reasonId} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" variant="danger" disabled={voidShipment.isPending}>
+          {t('shipment.void')}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          {t('orders.keep')}
+        </Button>
+      </div>
+      {voidShipment.error ? <ShipmentError error={voidShipment.error} /> : null}
+    </form>
+  );
+}
+
+function ShipmentError({ error }) {
+  const { t } = useI18n();
+
+  return error.status === 409 && error.violations?.[0]?.code === 'stale_version' ? (
+    <p role="alert" className="text-sm text-amber-900">
+      {t('orders.changedElsewhere')}
+    </p>
+  ) : (
+    <ErrorNotice error={error} />
   );
 }

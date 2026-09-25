@@ -49,7 +49,7 @@ final class DashboardResource
     /** Orders confirmed, allocated, picking or packed. */
     public int $awaitingFulfillment = 0;
 
-    /** Orders that took the ship transition today. */
+    /** Orders with at least one shipment shipped today, partly shipped ones included. */
     public int $shippedToday = 0;
 
     /** @var array<string, int> */

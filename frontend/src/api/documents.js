@@ -9,6 +9,8 @@ export const documentSchema = z.object({
   type: z.enum(DOCUMENT_TYPES),
   orderId: z.string(),
   orderNumber: z.string(),
+  // Set for a packing slip of one shipment.
+  shipmentId: z.string().nullish(),
   orderVersion: z.number().int(),
   locale: z.string(),
   status: z.enum(['queued', 'running', 'done', 'failed']),
@@ -24,11 +26,13 @@ const POLL_MS = 1000;
 /** A download link lasts five minutes; a fresh one is fetched before it runs out. */
 const RELINK_MS = 4 * 60 * 1000;
 
-/** Queue a pick list or packing slip for the order as it is now. */
+/** Queue a pick list or packing slip for the order as it is now, or a packing slip for one shipment. */
 export function useRequestDocument(orderId) {
   return useMutation({
-    mutationFn: async ({ type, locale }) =>
-      documentSchema.parse(await api(`/api/orders/${encodeURIComponent(orderId)}/documents`, { method: 'POST', body: { type, locale } })),
+    mutationFn: async ({ type, locale, shipmentId }) =>
+      documentSchema.parse(
+        await api(`/api/orders/${encodeURIComponent(orderId)}/documents`, { method: 'POST', body: { type, locale, ...(shipmentId ? { shipmentId } : {}) } }),
+      ),
   });
 }
 

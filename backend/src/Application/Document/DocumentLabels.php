@@ -32,6 +32,10 @@ final class DocumentLabels
             'picked_by' => 'Picked by',
             'checked_by' => 'Checked by',
             'thanks' => 'Thank you for your order.',
+            'shipment' => 'Parcel',
+            'carrier' => 'Carrier',
+            'tracking_number' => 'Tracking number',
+            'shipped' => 'Shipped',
             'generated' => 'Generated',
         ],
         'sv' => [
@@ -54,6 +58,10 @@ final class DocumentLabels
             'picked_by' => 'Plockad av',
             'checked_by' => 'Kontrollerad av',
             'thanks' => 'Tack för din beställning.',
+            'shipment' => 'Paket',
+            'carrier' => 'Transportör',
+            'tracking_number' => 'Spårningsnummer',
+            'shipped' => 'Skickat',
             'generated' => 'Skapad',
         ],
     ];

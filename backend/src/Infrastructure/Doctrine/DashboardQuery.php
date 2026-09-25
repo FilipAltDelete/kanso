@@ -9,16 +9,15 @@ use Kanso\Core\Internal\Domain\Dashboard\DashboardQueryInterface;
 use Kanso\Core\Internal\Domain\Dashboard\DashboardSummary;
 use Kanso\Core\Internal\Domain\Dashboard\StockOut;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
-use Kanso\Core\Internal\Domain\Order\Transition;
 use Symfony\Component\Uid\Uuid;
 
 /**
  * Plain SQL, no entities: the dashboard counts, and each count is answered
- * from an index (see Version20260927130000):
+ * from an index (Version20260927130000, Version20260928120000):
  *
  *   orders today         idx_sales_order_placed (placed_at)
  *   orders by status     idx_sales_order_status_placed (status, placed_at)
- *   shipped today        idx_order_event_transition (transition, occurred_at, order_id)
+ *   shipped today        idx_shipment_shipped (shipped_at, order_id)
  *   stock-outs           idx_inventory_level_available ((on_hand - reserved))
  */
 final class DashboardQuery implements DashboardQueryInterface
@@ -51,11 +50,12 @@ final class DashboardQuery implements DashboardQueryInterface
             $awaiting += $byStatus[$status->value];
         }
 
-        // Orders that shipped today, counted once each: the day of the ship
-        // transition, not the day the order was placed.
+        // Orders with a parcel out today, counted once each however many they
+        // had: a partly shipped order was shipped today too. The day of the
+        // shipment, not the day the order was placed. A voided shipment never left.
         $shippedToday = (int) $this->connection->fetchOne(
-            'SELECT COUNT(DISTINCT order_id) FROM order_event WHERE transition = ? AND occurred_at >= ? AND occurred_at < ?',
-            [Transition::Ship->value, $from, $to],
+            'SELECT COUNT(DISTINCT order_id) FROM shipment WHERE shipped_at >= ? AND shipped_at < ? AND voided_at IS NULL',
+            [$from, $to],
         );
 
         // on_hand >= reserved is a CHECK constraint, so "nothing available" is exactly zero.

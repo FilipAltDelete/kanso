@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kanso\Core\Internal\Application\Document;
 
 use Kanso\Core\Internal\Domain\Order\Order;
+use Kanso\Core\Internal\Domain\Order\Shipment;
 
 /**
  * What a document template sees of an order: plain strings and numbers,
@@ -18,18 +19,22 @@ final class OrderDocumentData
     }
 
     /** @return array<string, mixed> */
-    public static function build(Order $order, string $locale, \DateTimeImmutable $now): array
+    public static function build(Order $order, string $locale, \DateTimeImmutable $now, ?Shipment $shipment = null): array
     {
         // Timestamps are stored in UTC; until an installation has a time zone
         // setting, documents print UTC too, and say so.
         $date = new \IntlDateFormatter($locale, \IntlDateFormatter::MEDIUM, \IntlDateFormatter::NONE, 'UTC');
         $dateTime = new \IntlDateFormatter($locale, \IntlDateFormatter::MEDIUM, \IntlDateFormatter::SHORT, 'UTC');
 
+        // For one shipment: what is in that parcel, not what was ordered.
+        $entries = null === $shipment
+            // Cancelled units are neither picked nor packed (ADR-0011).
+            ? array_map(static fn ($line): array => [$line, $line->quantity() - $line->cancelledQuantity()], $order->lines())
+            : array_map(static fn ($line): array => [$line->orderLine(), $line->quantity()], $shipment->lines());
+
         $lines = [];
         $units = 0;
-        foreach ($order->lines() as $line) {
-            // Cancelled units are neither picked nor packed (ADR-0011).
-            $quantity = $line->quantity() - $line->cancelledQuantity();
+        foreach ($entries as [$line, $quantity]) {
             if (0 === $quantity) {
                 continue;
             }
@@ -61,8 +66,26 @@ final class OrderDocumentData
             'billTo' => null === $billing || $billing === $order->shippingAddress() ? null : self::addressLines($billing, $order->customerName(), $locale),
             'lines' => $lines,
             'totalUnits' => $units,
+            'shipment' => null === $shipment ? null : [
+                'number' => self::shipmentNumber($order, $shipment),
+                'carrier' => $shipment->carrier(),
+                'trackingNumber' => $shipment->trackingNumber(),
+                'shippedAt' => (string) $date->format($shipment->shippedAt()),
+            ],
             'generatedAt' => $dateTime->format($now).' UTC',
         ];
+    }
+
+    /** Which of the order's shipments this is: 1 for the first. */
+    public static function shipmentNumber(Order $order, Shipment $shipment): int
+    {
+        foreach ($order->shipments() as $index => $candidate) {
+            if ($candidate === $shipment) {
+                return $index + 1;
+            }
+        }
+
+        throw new \LogicException(\sprintf('Shipment %s is not one of order %s\'s.', $shipment->id(), $order->number()));
     }
 
     /**

@@ -16,7 +16,7 @@ interface DocumentStoreInterface
      * of rendering again. A failed one, or one queued long ago and lost, is
      * not.
      */
-    public function findReusable(DocumentType $type, Uuid $orderId, int $orderVersion, string $locale, \DateTimeImmutable $pendingSince): ?Document;
+    public function findReusable(DocumentType $type, Uuid $orderId, int $orderVersion, string $locale, \DateTimeImmutable $pendingSince, ?Uuid $shipmentId = null): ?Document;
 
     public function save(Document $document): void;
 }

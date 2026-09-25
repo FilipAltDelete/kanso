@@ -137,6 +137,77 @@ final class OrderShipmentTest extends TestCase
         $order->apply(Transition::Cancel, $this->actor, $this->now);
     }
 
+    public function testVoidingAShipmentUnshipsItsUnitsAndReservesThemAgain(): void
+    {
+        $order = $this->confirmedOrder([5, 2]);
+        [$tee, $socks] = $order->lines();
+        $order->ship([['line' => $tee, 'quantity' => 2]], null, null, $this->now, $this->actor, $this->now);
+        $mistake = $order->ship([['line' => $tee, 'quantity' => 1], ['line' => $socks, 'quantity' => 2]], 'DHL', 'X', $this->now, $this->actor, $this->now);
+
+        $order->voidShipment($mistake, 'Recorded twice', $this->actor, $this->now);
+
+        self::assertSame([3, 2], [$tee->reservedQuantity(), $tee->shippedQuantity()], 'reserved + shipped = quantity again');
+        self::assertSame([2, 0], [$socks->reservedQuantity(), $socks->shippedQuantity()]);
+        self::assertTrue($mistake->isVoided());
+        self::assertSame('Recorded twice', $mistake->voidReason());
+        self::assertSame(OrderStatus::Confirmed, $order->status());
+        self::assertTrue($order->canShip());
+        self::assertFalse($order->canVoid($mistake));
+        $events = $order->events();
+        $last = end($events);
+        self::assertNotFalse($last);
+        self::assertSame(OrderEvent::SHIPMENT_VOIDED, $last->type());
+    }
+
+    public function testVoidingTheLastShipmentReopensTheOrderWhereItShippedFrom(): void
+    {
+        $order = $this->confirmedOrder([2]);
+        $order->apply(Transition::Allocate, $this->actor, $this->now);
+        $shipment = $order->ship([['line' => $order->lines()[0], 'quantity' => 2]], null, null, $this->now, $this->actor, $this->now);
+        self::assertSame(OrderStatus::Shipped, $order->status());
+
+        $order->voidShipment($shipment, null, $this->actor, $this->now);
+
+        self::assertSame(OrderStatus::Allocated, $order->status());
+        self::assertSame([2, 0], [$order->lines()[0]->reservedQuantity(), $order->lines()[0]->shippedQuantity()]);
+        self::assertNotContains(Transition::Reopen, $order->availableTransitions());
+        self::assertContains(Transition::Cancel, $order->availableTransitions(), 'Nothing has shipped any more, so it can be cancelled.');
+    }
+
+    public function testADeliveredOrdersShipmentIsAReturnNotAVoid(): void
+    {
+        $order = $this->confirmedOrder([1]);
+        $shipment = $order->ship([['line' => $order->lines()[0], 'quantity' => 1]], null, null, $this->now, $this->actor, $this->now);
+        $order->apply(Transition::Deliver, $this->actor, $this->now);
+
+        $this->assertRefused(ShipmentRefused::NOT_VOIDABLE, fn () => $order->voidShipment($shipment, null, $this->actor, $this->now));
+        self::assertFalse($order->canVoid($shipment));
+    }
+
+    public function testAShipmentIsVoidedOnce(): void
+    {
+        $order = $this->confirmedOrder([2]);
+        $shipment = $order->ship([['line' => $order->lines()[0], 'quantity' => 1]], null, null, $this->now, $this->actor, $this->now);
+        $order->voidShipment($shipment, null, $this->actor, $this->now);
+
+        $this->assertRefused(ShipmentRefused::NOT_VOIDABLE, fn () => $order->voidShipment($shipment, null, $this->actor, $this->now));
+        self::assertSame([2, 0], [$order->lines()[0]->reservedQuantity(), $order->lines()[0]->shippedQuantity()]);
+    }
+
+    public function testCorrectingATrackingNumberRecordsBeforeAndAfter(): void
+    {
+        $order = $this->confirmedOrder([1]);
+        $shipment = $order->ship([['line' => $order->lines()[0], 'quantity' => 1]], 'PostNord', '0037O', $this->now, $this->actor, $this->now);
+
+        $event = $order->correctShipment($shipment, 'PostNord', '00370', $this->actor, $this->now);
+
+        self::assertSame('00370', $shipment->trackingNumber());
+        self::assertNotNull($event);
+        self::assertSame([OrderEvent::SHIPMENT_CORRECTED, '0037O', '00370'], [$event->type(), $event->before()['trackingNumber'] ?? null, $event->after()['trackingNumber'] ?? null]);
+        self::assertNull($order->correctShipment($shipment, 'PostNord', '00370', $this->actor, $this->now), 'No change, no event.');
+        self::assertSame(OrderStatus::Shipped, $order->status(), 'A correction moves nothing.');
+    }
+
     /** @param list<int> $quantities one line each: TEE, SOCKS, … */
     private function order(array $quantities): Order
     {

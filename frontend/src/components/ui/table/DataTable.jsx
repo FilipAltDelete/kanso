@@ -37,6 +37,10 @@ const SELECT_COLUMN = '__select';
  *
  * With `manual`, the caller does the sorting, filtering and paging on the
  * server: `data` is the current page and `rowCount` the total.
+ *
+ * With `fill`, the table takes the height its parent (a flex column) has
+ * left and scrolls inside itself, so the page around it stays put: the
+ * toolbar and pagination remain in view and the header row sticks.
  */
 export function DataTable({
   label,
@@ -55,6 +59,7 @@ export function DataTable({
   onRowActivate,
   pageSizes = PAGE_SIZES,
   emptyMessage,
+  fill = false,
   className,
 }) {
   const { t, locale } = useI18n();
@@ -115,6 +120,12 @@ export function DataTable({
     ];
   }, [columns, selectable, t, getRowLabel]);
 
+  // Filter-only columns (`meta.hidden`) are never drawn.
+  const columnVisibility = useMemo(
+    () => Object.fromEntries(columns.filter((column) => column.meta?.hidden).map((column) => [column.id ?? column.accessorKey, false])),
+    [columns],
+  );
+
   const table = useReactTable({
     data,
     columns: allColumns,
@@ -125,6 +136,7 @@ export function DataTable({
       columnFilters: view.columnFilters,
       pagination: { pageIndex: view.pageIndex, pageSize: view.pageSize },
       rowSelection,
+      columnVisibility,
     },
     onSortingChange: (updater) => update({ sorting: functionalUpdate(updater, view.sorting), pageIndex: 0 }),
     onGlobalFilterChange: (updater) => update({ globalFilter: functionalUpdate(updater, view.globalFilter) ?? '', pageIndex: 0 }),
@@ -249,7 +261,7 @@ export function DataTable({
   const primarySort = view.sorting[0];
 
   return (
-    <div className={cn('space-y-3', className)}>
+    <div className={cn(fill ? 'flex min-h-0 flex-1 flex-col gap-3' : 'space-y-3', className)}>
       <TableToolbar
         table={table}
         searchable={searchable}
@@ -267,7 +279,10 @@ export function DataTable({
         />
       ) : null}
 
-      <div ref={scrollerRef} className={cn('overflow-auto rounded-lg border border-slate-200 bg-white', virtual && 'max-h-[70vh]')}>
+      <div
+        ref={scrollerRef}
+        className={cn('overflow-auto rounded-lg border border-slate-200 bg-white', fill ? 'min-h-0 flex-1' : virtual && 'max-h-[70vh]')}
+      >
         <table
           ref={gridRef}
           role="grid"

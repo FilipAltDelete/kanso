@@ -32,6 +32,7 @@ final class RequestDocumentProcessor implements ProcessorInterface
             $data->type,
             $data->locale,
             $this->actor->get(),
+            $data->shipmentId,
         ));
     }
 }

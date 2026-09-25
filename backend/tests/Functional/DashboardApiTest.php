@@ -64,6 +64,34 @@ final class DashboardApiTest extends WebTestCase
         self::assertCount(9, $after['ordersByStatus']);
     }
 
+    public function testAPartShipmentShipsTheOrderTodayAndTheListFindsIt(): void
+    {
+        $sku = $this->stockedProduct(50);
+        $order = $this->createOrder($sku, 3);
+        foreach (['confirm', 'allocate', 'start_picking', 'pack'] as $transition) {
+            $order = $this->move($order, $transition);
+        }
+        $before = $this->dashboard();
+
+        // One of three units: the order is not shipped, but a parcel left today.
+        $order = $this->ship($order, 1);
+        self::assertSame('packed', $order['status']);
+
+        $after = $this->dashboard();
+        self::assertSame(1, $after['shippedToday'] - $before['shippedToday']);
+        self::assertSame(0, $after['awaitingFulfillment'] - $before['awaitingFulfillment'], 'still in the queue');
+
+        // The card's link: orders with a shipment today.
+        $today = $this->orderNumbers(['shippedFrom' => $after['dayStart'], 'shippedBefore' => $after['dayEnd'], 'q' => $order['number']]);
+        self::assertSame([$order['number']], $today);
+        $yesterday = $this->orderNumbers(['shippedBefore' => $after['dayStart'], 'q' => $order['number']]);
+        self::assertSame([], $yesterday);
+
+        // A second parcel the same day is still one order shipped today.
+        $this->ship($order, 2);
+        self::assertSame(1, $this->dashboard()['shippedToday'] - $before['shippedToday']);
+    }
+
     public function testAProductWithNothingAvailableIsAStockOut(): void
     {
         $before = $this->dashboard();
@@ -182,6 +210,37 @@ final class DashboardApiTest extends WebTestCase
         self::assertResponseIsSuccessful((string) $this->client->getResponse()->getContent());
 
         return $this->json();
+    }
+
+    /**
+     * Ships `$quantity` units of the order's first line.
+     *
+     * @param array<string, mixed> $order
+     *
+     * @return array<string, mixed>
+     */
+    private function ship(array $order, int $quantity): array
+    {
+        $this->request('POST', '/api/orders/'.$order['id'].'/shipments', $this->operator, [
+            'version' => $order['version'],
+            'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => $quantity]],
+        ]);
+        self::assertResponseIsSuccessful((string) $this->client->getResponse()->getContent());
+
+        return $this->json();
+    }
+
+    /**
+     * @param array<string, string> $query
+     *
+     * @return list<string>
+     */
+    private function orderNumbers(array $query): array
+    {
+        $this->request('GET', '/api/orders?'.http_build_query($query), $this->operator);
+        self::assertResponseIsSuccessful((string) $this->client->getResponse()->getContent());
+
+        return array_column($this->json()['member'], 'number');
     }
 
     private function productId(string $sku): string

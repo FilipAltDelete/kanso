@@ -144,6 +144,20 @@ final class InventoryLevelTest extends TestCase
         $this->assertRule(StockRuleViolated::TOO_LARGE, fn () => $level->adjustBy(1, $this->now));
     }
 
+    public function testAVoidedShipmentPutsItsUnitsBackOnHandAndReserved(): void
+    {
+        $level = $this->level(onHand: 10);
+        $level->reserve(4, $this->now);
+        $level->consume(3, $this->now);
+        self::assertSame([7, 1, 6], [$level->onHand(), $level->reserved(), $level->available()]);
+
+        $change = $level->unconsume(3, $this->now);
+
+        self::assertSame([10, 4, 6], [$level->onHand(), $level->reserved(), $level->available()], 'Back where it was before the shipment; available never moved.');
+        self::assertSame([3, 3], [$change->onHandDelta(), $change->reservedDelta()]);
+        $this->assertRule(StockRuleViolated::NOT_POSITIVE, fn () => $level->unconsume(0, $this->now));
+    }
+
     public function testAChangeStampsTheLevel(): void
     {
         $level = $this->level();

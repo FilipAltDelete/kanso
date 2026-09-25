@@ -15,6 +15,7 @@ use Kanso\Core\Internal\Api\State\CreateOrderProcessor;
 use Kanso\Core\Internal\Api\State\CreateShipmentProcessor;
 use Kanso\Core\Internal\Api\State\EditOrderProcessor;
 use Kanso\Core\Internal\Api\State\OrderProvider;
+use Kanso\Core\Internal\Api\State\ShipmentChangeProcessor;
 use Kanso\Core\Internal\Api\State\TransitionOrderProcessor;
 use Symfony\Component\Serializer\Attribute\Groups;
 
@@ -36,6 +37,8 @@ use Symfony\Component\Serializer\Attribute\Groups;
                 'channel' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated channel codes.'),
                 'placedFrom' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed at or after this instant (ISO 8601 with offset, or a date meaning UTC midnight).'),
                 'placedBefore' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed before this instant.'),
+                'shippedFrom' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'With a shipment shipped at or after this instant (a partly shipped order counts).'),
+                'shippedBefore' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'With a shipment shipped before this instant.'),
                 'q' => new QueryParameter(schema: ['type' => 'string'], description: 'Search the order number, external reference, customer name and customer email.'),
                 'tag' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated tags; orders with any of them. Case does not matter.'),
                 'paymentStatus' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated payment statuses: unpaid, authorized, paid, refunded, partially_refunded.'),
@@ -66,6 +69,28 @@ use Symfony\Component\Serializer\Attribute\Groups;
             processor: CreateShipmentProcessor::class,
             normalizationContext: ['groups' => ['order:list', 'order:detail']],
             description: 'Ship some or all of what is left: lines and quantities (part of a line is fine), carrier and tracking number. The units come off stock on hand and off the reservation; the order becomes shipped when nothing is left. Send the version you last saw: 409 if the order changed since, or if it is not in a status that ships. Answers with the order.',
+        ),
+        new Post(
+            uriTemplate: '/orders/{id}/shipments/{shipmentId}/void',
+            uriVariables: ['id', 'shipmentId'],
+            status: 200,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: ShipmentVoidInput::class,
+            read: false,
+            processor: ShipmentChangeProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Take back a shipment recorded by mistake: its units go back on hand, reserved for the order again, and an order that had shipped is reopened where it shipped from. The shipment is kept, marked void. Not for a delivered order (that is a return). Send the version you last saw. Answers with the order.',
+        ),
+        new Post(
+            uriTemplate: '/orders/{id}/shipments/{shipmentId}/tracking',
+            uriVariables: ['id', 'shipmentId'],
+            status: 200,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: ShipmentCorrectionInput::class,
+            read: false,
+            processor: ShipmentChangeProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Correct a shipment\'s carrier and tracking number; a field left out is kept, null clears it. Moves no stock. Send the version you last saw. Answers with the order.',
         ),
         new Post(
             uriTemplate: '/orders/{id}/transitions',

@@ -89,6 +89,11 @@ export const orderSchema = orderSummarySchema.extend({
         trackingNumber: z.string().nullish(),
         shippedAt: z.string(),
         actor: z.object({ id: z.string(), name: z.string() }),
+        // Set when the shipment was taken back: it no longer counts.
+        voidedAt: z.string().nullish(),
+        voidedBy: z.object({ id: z.string(), name: z.string() }).nullish(),
+        voidReason: z.string().nullish(),
+        voidable: z.boolean().default(false),
         lines: z.array(z.object({ lineId: z.string(), position: z.number().int(), sku: z.string(), name: z.string(), quantity: z.number().int() })),
       }),
     )
@@ -139,10 +144,12 @@ export function orderListQuery(view) {
   if (view.globalFilter) params.set('q', view.globalFilter);
 
   for (const { id, value } of view.columnFilters) {
-    if (id === 'placedAt') {
+    if (id === 'placedAt' || id === 'shippedAt') {
+      // Placed in the range, or with a shipment shipped in it.
+      const prefix = id === 'placedAt' ? 'placed' : 'shipped';
       const [from, to] = String(value).split('..');
-      if (from) params.set('placedFrom', localMidnight(from));
-      if (to) params.set('placedBefore', localMidnight(to, 1));
+      if (from) params.set(`${prefix}From`, localMidnight(from));
+      if (to) params.set(`${prefix}Before`, localMidnight(to, 1));
     } else if (id === 'status' || id === 'channel' || id === 'paymentStatus') {
       params.set(id, String(value));
     } else if (id === 'tags') {
@@ -218,6 +225,35 @@ export function useCreateShipment(id) {
       if (error?.status === 409) queryClient.invalidateQueries({ queryKey: ['order', id] });
     },
   });
+}
+
+/** A change to one shipment (`void` or `tracking`); answers with the order, which replaces the one on screen. */
+function useShipmentChange(orderId, action) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ shipmentId, ...body }) =>
+      orderSchema.parse(
+        await api(`/api/orders/${encodeURIComponent(orderId)}/shipments/${encodeURIComponent(shipmentId)}/${action}`, { method: 'POST', body }),
+      ),
+    onSuccess: (order) => {
+      queryClient.setQueryData(['order', orderId], order);
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    onError: (error) => {
+      if (error?.status === 409) queryClient.invalidateQueries({ queryKey: ['order', orderId] });
+    },
+  });
+}
+
+/** Takes back a shipment recorded by mistake: `{ shipmentId, version, reason? }`. */
+export function useVoidShipment(orderId) {
+  return useShipmentChange(orderId, 'void');
+}
+
+/** Corrects carrier and tracking number: `{ shipmentId, version, carrier?, trackingNumber? }`. */
+export function useCorrectShipment(orderId) {
+  return useShipmentChange(orderId, 'tracking');
 }
 
 export function useTransitionOrder(id) {
