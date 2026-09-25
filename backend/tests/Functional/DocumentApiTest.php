@@ -196,6 +196,114 @@ final class DocumentApiTest extends WebTestCase
         self::assertNotSame($queued['id'], $this->requestDocument($order['id'], ['type' => 'pick_list'])['id'], 'asking again tries again');
     }
 
+    public function testManyOrdersArePrintedInOnePdfAndTheOnesThatCannotBeAreListed(): void
+    {
+        $first = $this->createOrder();
+        $second = $this->createOrder();
+        $held = $this->transition($this->createOrder(), 'hold');
+        $cancelled = $this->transition($this->createOrder(), 'cancel');
+        $unknown = '0199aaaa-0000-7000-8000-00000000abcd';
+
+        // Asked for out of order: the PDF goes by order number.
+        $result = $this->bulk(['type' => 'pick_list', 'locale' => 'sv', 'orderIds' => [$second['id'], $held['id'], $unknown, $first['id'], $cancelled['id']]], $this->viewer);
+
+        $document = $result['document'];
+        self::assertSame('queued', $document['status']);
+        self::assertNull($document['orderId']);
+        self::assertNull($document['orderNumber']);
+        self::assertSame(
+            [['id' => $first['id'], 'number' => $first['number'], 'version' => $first['version']], ['id' => $second['id'], 'number' => $second['number'], 'version' => $second['version']]],
+            $document['orders'],
+        );
+        self::assertMatchesRegularExpression('/^pick-lists-\d{8}-\d{4}\.pdf$/', $document['filename']);
+        self::assertSame('Vera Viewer', $document['requestedBy']['name']);
+        self::assertSame(
+            [[$held['id'], $held['number'], 'on_hold'], [$unknown, null, 'not_found'], [$cancelled['id'], $cancelled['number'], 'cancelled']],
+            array_map(static fn (array $s): array => [$s['id'], $s['number'], $s['code']], $result['skipped']),
+        );
+
+        self::assertSame($document['id'], $this->bulk(['type' => 'pick_list', 'locale' => 'sv', 'orderIds' => [$first['id'], $second['id']]])['document']['id'], 'the same orders, unchanged, get the same document');
+        self::assertSame(1, $this->work());
+
+        $done = $this->getDocument($document['id']);
+        self::assertSame('done', $done['status']);
+        self::assertIsString($done['downloadUrl']);
+        self::assertStringContainsString(rawurlencode('filename="'.$document['filename'].'"'), $done['downloadUrl']);
+        $pdf = stream_get_contents($this->storage()->readStream('documents/'.$document['id'].'.pdf'));
+        self::assertIsString($pdf);
+        self::assertStringStartsWith('%PDF-', $pdf);
+
+        // A held order has no picking to do, but its parcel can still be packed.
+        $slips = $this->bulk(['type' => 'packing_slip', 'orderIds' => [$first['id'], $held['id']]]);
+        self::assertSame([$first['number'], $held['number']], array_column($slips['document']['orders'], 'number'));
+        self::assertSame([], $slips['skipped']);
+    }
+
+    public function testAChangedOrderMakesTheBatchAFreshDocument(): void
+    {
+        $first = $this->createOrder();
+        $second = $this->createOrder();
+        $before = $this->bulk(['type' => 'pick_list', 'orderIds' => [$first['id'], $second['id']]])['document'];
+
+        $this->transition($second, 'confirm');
+
+        self::assertNotSame($before['id'], $this->bulk(['type' => 'pick_list', 'orderIds' => [$first['id'], $second['id']]])['document']['id']);
+    }
+
+    public function testWhenNoOrderCanBePrintedNoDocumentIsMade(): void
+    {
+        $cancelled = $this->transition($this->createOrder(), 'cancel');
+
+        $result = $this->bulk(['type' => 'packing_slip', 'orderIds' => [$cancelled['id']]]);
+
+        self::assertNull($result['document']);
+        self::assertSame('cancelled', $result['skipped'][0]['code']);
+        self::assertSame(0, $this->work());
+    }
+
+    public function testABadBulkRequestIsAProblem(): void
+    {
+        $this->request('POST', '/api/orders/bulk-documents', $this->operator, ['type' => 'invoice', 'orderIds' => []]);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame(['type', 'orderIds'], array_column($this->json()['violations'], 'path'));
+
+        $ids = array_map(static fn (int $i): string => \sprintf('0199aaaa-0000-7000-8000-%012d', $i), range(1, 101));
+        $this->request('POST', '/api/orders/bulk-documents', $this->operator, ['type' => 'pick_list', 'orderIds' => $ids]);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('too_many', $this->json()['violations'][0]['code']);
+
+        $this->request('POST', '/api/orders/bulk-documents', $this->operator, ['type' => 'pick_list', 'orderIds' => ['x', 7]]);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame(['orderIds[1]'], array_column($this->json()['violations'], 'path'));
+        self::assertSame(0, $this->work(), 'nothing was queued');
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     *
+     * @return array<string, mixed> the order after the transition
+     */
+    private function transition(array $order, string $transition): array
+    {
+        $this->request('POST', '/api/orders/'.$order['id'].'/transitions', $this->operator, ['transition' => $transition, 'version' => $order['version']]);
+        self::assertResponseIsSuccessful();
+
+        return $this->json();
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed> `document` (or null) and `skipped`
+     */
+    private function bulk(array $body, ?string $token = null): array
+    {
+        $this->request('POST', '/api/orders/bulk-documents', $token ?? $this->operator, $body);
+        self::assertResponseStatusCodeSame(200, (string) $this->client->getResponse()->getContent());
+
+        return $this->json();
+    }
+
     /** Runs what the worker would: every queued message, through its handler. Returns how many. */
     private function work(): int
     {

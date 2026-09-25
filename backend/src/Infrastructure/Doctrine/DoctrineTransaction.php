@@ -47,4 +47,10 @@ final class DoctrineTransaction implements TransactionInterface
             throw $e;
         }
     }
+
+    /** Doctrine checks every entity it holds for changes on each flush; a batch that never lets go slows down row by row. */
+    public function forget(): void
+    {
+        $this->em->clear();
+    }
 }

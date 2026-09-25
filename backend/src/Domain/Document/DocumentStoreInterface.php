@@ -18,5 +18,8 @@ interface DocumentStoreInterface
      */
     public function findReusable(DocumentType $type, Uuid $orderId, int $orderVersion, string $locale, \DateTimeImmutable $pendingSince, ?Uuid $shipmentId = null): ?Document;
 
+    /** The same for a batch document, by its key (Document::batchKey()). */
+    public function findReusableBatch(string $batchKey, \DateTimeImmutable $pendingSince): ?Document;
+
     public function save(Document $document): void;
 }

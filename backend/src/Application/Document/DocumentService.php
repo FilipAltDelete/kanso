@@ -14,6 +14,7 @@ use Kanso\Core\Internal\Domain\Document\DocumentType;
 use Kanso\Core\Internal\Domain\Document\PdfRendererInterface;
 use Kanso\Core\Internal\Domain\Document\TemplateRendererInterface;
 use Kanso\Core\Internal\Domain\Order\Order;
+use Kanso\Core\Internal\Domain\Order\OrderStatus;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
 use Kanso\Core\Internal\Domain\Order\Shipment;
 use Kanso\Core\Internal\Domain\Storage\ObjectStorageInterface;
@@ -35,6 +36,9 @@ final class DocumentService
     /** A queued document older than this is presumed lost (no worker running) and not handed out again. */
     public const int PENDING_REUSE_SECONDS = 600;
 
+    /** The most orders in one batch document: a few hundred pages is as much as one render should take on. */
+    public const int MAX_BATCH_ORDERS = 100;
+
     public function __construct(
         private readonly DocumentStoreInterface $documents,
         private readonly OrderStoreInterface $orders,
@@ -52,15 +56,7 @@ final class DocumentService
      */
     public function request(string $orderId, mixed $type, mixed $locale, Actor $actor, mixed $shipmentId = null): Document
     {
-        $violations = [];
-        $documentType = \is_string($type) ? DocumentType::tryFrom($type) : null;
-        if (null === $documentType) {
-            $violations[] = ['path' => 'type', 'message' => \sprintf('The type is one of: %s.', implode(', ', array_column(DocumentType::cases(), 'value'))), 'code' => 'invalid_choice'];
-        }
-        $locale ??= 'en';
-        if (!\in_array($locale, DocumentLabels::locales(), true)) {
-            $violations[] = ['path' => 'locale', 'message' => 'The locale is "sv" or "en".', 'code' => 'invalid_choice'];
-        }
+        [$documentType, $locale, $violations] = self::checkTypeAndLocale($type, $locale);
         if (null !== $shipmentId && DocumentType::PackingSlip !== $documentType) {
             $violations[] = ['path' => 'shipmentId', 'message' => 'Only a packing slip can be for one shipment.', 'code' => 'invalid_choice'];
         }
@@ -104,6 +100,78 @@ final class DocumentService
         return $document;
     }
 
+    /**
+     * Queues one PDF of pick lists or packing slips for several orders, each
+     * on its own pages, in order-number order. An order that should not be
+     * printed is left out and listed with the reason: one that does not
+     * exist, a cancelled one, and for pick lists one that has shipped or is
+     * on hold. The same request for the same unchanged orders gets back the
+     * document it already has. When no order is left, no document is made.
+     *
+     * @return array{document: ?Document, skipped: list<array{id: string, number: ?string, code: string, message: string}>}
+     */
+    public function requestBatch(mixed $type, mixed $locale, mixed $orderIds, Actor $actor): array
+    {
+        [$documentType, $locale, $violations] = self::checkTypeAndLocale($type, $locale);
+        $ids = [];
+        if (!\is_array($orderIds) || !array_is_list($orderIds) || [] === $orderIds) {
+            $violations[] = ['path' => 'orderIds', 'message' => 'Send the ids of the orders to print, as a list.', 'code' => 'required'];
+        } else {
+            foreach ($orderIds as $index => $id) {
+                if (!\is_string($id) || '' === $id) {
+                    $violations[] = ['path' => \sprintf('orderIds[%d]', $index), 'message' => 'An order id is text.', 'code' => 'type'];
+                } else {
+                    $ids[$id] = true;
+                }
+            }
+            if (\count($ids) > self::MAX_BATCH_ORDERS) {
+                $violations[] = ['path' => 'orderIds', 'message' => \sprintf('At most %d orders in one document.', self::MAX_BATCH_ORDERS), 'code' => 'too_many'];
+            }
+        }
+        if ([] !== $violations) {
+            throw new ValidationFailed($violations);
+        }
+        \assert($documentType instanceof DocumentType && \is_string($locale));
+
+        $found = [];
+        foreach ($this->orders->findByIds(array_map(strval(...), array_keys($ids))) as $order) {
+            $found[(string) $order->id()] = $order;
+        }
+
+        $included = [];
+        $skipped = [];
+        foreach (array_keys($ids) as $id) {
+            $id = (string) $id;
+            $order = $found[$id] ?? null;
+            if (null === $order) {
+                $skipped[] = ['id' => $id, 'number' => null, 'code' => 'not_found', 'message' => \sprintf('No order "%s".', $id)];
+                continue;
+            }
+            $reason = self::skipReason($documentType, $order);
+            if (null !== $reason) {
+                $skipped[] = ['id' => $id, 'number' => $order->number(), 'code' => $reason['code'], 'message' => $reason['message']];
+                continue;
+            }
+            $included[] = ['id' => $id, 'number' => $order->number(), 'version' => $order->version()];
+        }
+
+        if ([] === $included) {
+            return ['document' => null, 'skipped' => $skipped];
+        }
+        usort($included, static fn (array $a, array $b): int => strnatcmp($a['number'], $b['number']));
+
+        $now = $this->clock->now();
+        $document = $this->documents->findReusableBatch(Document::batchKey($documentType, $included, $locale), $now->modify(\sprintf('-%d seconds', self::PENDING_REUSE_SECONDS)));
+        if (null === $document) {
+            $document = Document::forOrders($documentType, $included, $locale, $actor, $now);
+            $this->documents->save($document);
+            // After the row is committed, as for one order's document.
+            $this->bus->dispatch(new GenerateDocument((string) $document->id()));
+        }
+
+        return ['document' => $document, 'skipped' => $skipped];
+    }
+
     public function get(string $id): Document
     {
         return $this->documents->findById($id) ?? throw new NotFound(\sprintf('No document "%s".', $id));
@@ -133,6 +201,11 @@ final class DocumentService
         if (DocumentStatus::Done === $document->status()) {
             return;
         }
+        if ($document->isBatch()) {
+            $this->generateBatch($document);
+
+            return;
+        }
 
         $order = $this->orders->findById((string) $document->orderId());
         if (null === $order) {
@@ -160,6 +233,84 @@ final class DocumentService
 
         $document->complete($key, \strlen($pdf), $this->clock->now());
         $this->documents->save($document);
+    }
+
+    /**
+     * A batch prints each order as it is now, in the order it was asked for;
+     * an order gone since is left out, and when none is left the document fails.
+     */
+    private function generateBatch(Document $document): void
+    {
+        $found = [];
+        foreach ($this->orders->findByIds(array_column($document->batchOrders(), 'id')) as $order) {
+            $found[(string) $order->id()] = $order;
+        }
+
+        $now = $this->clock->now();
+        $entries = [];
+        foreach ($document->batchOrders() as $entry) {
+            if (isset($found[$entry['id']])) {
+                $entries[] = OrderDocumentData::build($found[$entry['id']], $document->locale(), $now);
+            }
+        }
+        if ([] === $entries) {
+            $this->fail($document, 'None of the orders exists any more.');
+
+            throw new UnrecoverableMessageHandlingException(\sprintf('Every order of document "%s" is gone.', $document->id()));
+        }
+
+        $document->start();
+        $this->documents->save($document);
+
+        $html = $this->templates->render($document->type(), [
+            'locale' => $document->locale(),
+            'labels' => DocumentLabels::for($document->locale()),
+            'orders' => $entries,
+            'generatedAt' => $entries[0]['generatedAt'],
+        ], batch: true);
+        $pdf = $this->pdf->render($html);
+
+        $key = $document->intendedStorageKey();
+        $this->storage->write($key, $pdf, 'application/pdf');
+
+        $document->complete($key, \strlen($pdf), $this->clock->now());
+        $this->documents->save($document);
+    }
+
+    /**
+     * @return array{?DocumentType, mixed, list<array{path: string, message: string, code: string}>} the type, the locale (default en) and what is wrong with them
+     */
+    private static function checkTypeAndLocale(mixed $type, mixed $locale): array
+    {
+        $violations = [];
+        $documentType = \is_string($type) ? DocumentType::tryFrom($type) : null;
+        if (null === $documentType) {
+            $violations[] = ['path' => 'type', 'message' => \sprintf('The type is one of: %s.', implode(', ', array_column(DocumentType::cases(), 'value'))), 'code' => 'invalid_choice'];
+        }
+        $locale ??= 'en';
+        if (!\in_array($locale, DocumentLabels::locales(), true)) {
+            $violations[] = ['path' => 'locale', 'message' => 'The locale is "sv" or "en".', 'code' => 'invalid_choice'];
+        }
+
+        return [$documentType, $locale, $violations];
+    }
+
+    /**
+     * Why an order is left out of a batch, or null to print it. Nothing is
+     * picked for a cancelled, shipped or held order, and a cancelled order
+     * sends no parcel to pack.
+     *
+     * @return array{code: string, message: string}|null
+     */
+    private static function skipReason(DocumentType $type, Order $order): ?array
+    {
+        return match (true) {
+            OrderStatus::Cancelled === $order->status() => ['code' => 'cancelled', 'message' => \sprintf('Order %s is cancelled.', $order->number())],
+            DocumentType::PickList !== $type => null,
+            OrderStatus::OnHold === $order->status() => ['code' => 'on_hold', 'message' => \sprintf('Order %s is on hold; release it before picking.', $order->number())],
+            \in_array($order->status(), [OrderStatus::Shipped, OrderStatus::Delivered], true) => ['code' => 'nothing_to_pick', 'message' => \sprintf('Order %s has shipped; nothing is left to pick.', $order->number())],
+            default => null,
+        };
     }
 
     private function shipment(Order $order, mixed $id): ?Shipment

@@ -19,10 +19,11 @@ final class DocumentPresenter
         $resource = new DocumentResource();
         $resource->id = (string) $document->id();
         $resource->type = $document->type()->value;
-        $resource->orderId = (string) $document->orderId();
+        $resource->orderId = $document->orderId()?->toRfc4122();
         $resource->orderNumber = $document->orderNumber();
         $resource->shipmentId = null === $document->shipmentId() ? null : (string) $document->shipmentId();
         $resource->orderVersion = $document->orderVersion();
+        $resource->orders = $document->batchOrders();
         $resource->locale = $document->locale();
         // Why it failed stays in the database and the logs: the message can
         // name internal hosts, which is nothing for an API client.

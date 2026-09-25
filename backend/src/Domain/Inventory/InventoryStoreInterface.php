@@ -39,6 +39,17 @@ interface InventoryStoreInterface
      */
     public function totals(array $productIds): array;
 
+    /**
+     * On hand and reserved for every level of these products, as plain
+     * numbers: a read for checking many rows at once (a stock import's
+     * preview) that loads no entities.
+     *
+     * @param list<string> $productIds
+     *
+     * @return array<string, array<string, array{onHand: int, reserved: int}>> by product id, then location id; levels that do not exist are absent
+     */
+    public function quantities(array $productIds): array;
+
     public function findMovementById(string $id): ?InventoryMovement;
 
     /**

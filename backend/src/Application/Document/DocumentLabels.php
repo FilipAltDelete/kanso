@@ -37,6 +37,9 @@ final class DocumentLabels
             'tracking_number' => 'Tracking number',
             'shipped' => 'Shipped',
             'generated' => 'Generated',
+            'pick_lists' => 'Pick lists',
+            'packing_slips' => 'Packing slips',
+            'orders' => 'orders',
         ],
         'sv' => [
             'pick_list' => 'Plocklista',
@@ -63,6 +66,9 @@ final class DocumentLabels
             'tracking_number' => 'Spårningsnummer',
             'shipped' => 'Skickat',
             'generated' => 'Skapad',
+            'pick_lists' => 'Plocklistor',
+            'packing_slips' => 'Följesedlar',
+            'orders' => 'ordrar',
         ],
     ];
 

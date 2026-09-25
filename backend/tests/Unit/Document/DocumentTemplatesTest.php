@@ -97,19 +97,59 @@ final class DocumentTemplatesTest extends TestCase
         self::assertStringContainsString('/Type /Page', $pdf);
     }
 
+    public function testSeveralOrdersEachStartOnANewPageAndSayWhoseTheyAre(): void
+    {
+        $now = new \DateTimeImmutable('2026-09-26 10:00:00');
+        $renderer = new TwigTemplateRenderer(self::TEMPLATES);
+        $data = static fn (string $locale, Order ...$orders): array => [
+            'locale' => $locale,
+            'labels' => DocumentLabels::for($locale),
+            'orders' => array_map(static fn (Order $order): array => OrderDocumentData::build($order, $locale, $now), $orders),
+            'generatedAt' => '26 sep. 2026 10:00 UTC',
+        ];
+
+        $html = $renderer->render(DocumentType::PickList, $data('sv', $this->order(), $this->order(number: '10043')), batch: true);
+
+        self::assertSame(2, substr_count($html, '<h1>Plocklista</h1>'));
+        self::assertStringContainsString('<strong>10042</strong>', $html);
+        self::assertStringContainsString('<strong>10043</strong>', $html);
+        self::assertSame(1, substr_count($html, 'page-break-before: always'), 'the second order starts a page; the first does not');
+        self::assertStringContainsString('<th colspan="5" class="continued">Order 10043</th>', $html, 'repeated on a long order\'s next page');
+        self::assertStringContainsString('Plocklistor · 2 ordrar · Skapad', $html);
+        self::assertStringContainsString('<title>Plocklistor</title>', $html);
+
+        $slips = $renderer->render(DocumentType::PackingSlip, $data('en', $this->order()), batch: true);
+        self::assertStringContainsString('<h1>Packing slip</h1>', $slips);
+        self::assertStringContainsString('Packing slips · 1 order ·', $slips);
+        self::assertStringNotContainsString('199', $slips, 'no unit price');
+
+        $pdf = new DompdfRenderer(self::TEMPLATES)->render($html);
+        self::assertStringStartsWith('%PDF-', $pdf);
+        self::assertSame(2, preg_match_all('#/Type /Page\b#', $pdf), 'one page per order');
+    }
+
+    public function testOneOrdersDocumentIsUnchangedByTheBatchLayout(): void
+    {
+        $html = $this->render(DocumentType::PickList, 'en', $this->order());
+
+        self::assertStringNotContainsString('class="continued"', $html);
+        self::assertStringContainsString('<title>Pick list 10042</title>', $html);
+        self::assertStringContainsString('Order 10042 · Generated', $html);
+    }
+
     private function render(DocumentType $type, string $locale, Order $order): string
     {
         return new TwigTemplateRenderer(self::TEMPLATES)->render($type, OrderDocumentData::build($order, $locale, new \DateTimeImmutable('2026-09-26 10:00:00')));
     }
 
     /** @param array<string, string|null>|null $billing */
-    private function order(?array $billing = null, string $customerName = 'Åsa Öberg'): Order
+    private function order(?array $billing = null, string $customerName = 'Åsa Öberg', string $number = '10042'): Order
     {
         $now = new \DateTimeImmutable('2026-09-25 12:00:00');
         $shipping = ['name' => null, 'line1' => 'Storgatan 1', 'line2' => null, 'postalCode' => '111 22', 'city' => 'Stockholm', 'region' => null, 'countryCode' => 'SE', 'phone' => null];
 
         return Order::place(
-            '10042',
+            $number,
             new Channel('manual', 'Manual', 'manual', 'SEK', $now),
             'SEK',
             new Location('WH1', 'Main', new Address(), $now),

@@ -25,7 +25,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
             provider: ImportRunProvider::class,
             normalizationContext: ['groups' => ['run:list'], 'skip_null_values' => false],
             parameters: [
-                'type' => new QueryParameter(schema: ['type' => 'string', 'enum' => ['products', 'orders']], description: 'Only imports of this kind.'),
+                'type' => new QueryParameter(schema: ['type' => 'string', 'enum' => ['products', 'orders', 'stock']], description: 'Only imports of this kind.'),
             ],
         ),
         new Get(
@@ -42,7 +42,7 @@ final class ImportRunResource
     #[Groups(['run:list'])]
     public string $id = '';
 
-    /** `products` or `orders`. */
+    /** `products`, `orders` or `stock`. */
     #[Groups(['run:list'])]
     public string $type = '';
 
@@ -56,7 +56,7 @@ final class ImportRunResource
     #[Groups(['run:list'])]
     public string $actorName = '';
 
-    /** @var array<string, int> the import's counts, named as in its result (rows, created, updated, unchanged, orders, existing, failed) */
+    /** @var array<string, int> the import's counts, named as in its result (rows, created, updated, unchanged, orders, existing, changed, failed) */
     #[ApiProperty(schema: ['type' => 'object', 'additionalProperties' => ['type' => 'integer']])]
     #[Groups(['run:list'])]
     public array $counts = [];
@@ -66,7 +66,7 @@ final class ImportRunResource
     public int $errorCount = 0;
 
     /** @var list<array<string, mixed>> */
-    #[ApiProperty(schema: ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['row' => ['type' => 'integer'], 'sku' => ['type' => ['string', 'null']], 'reference' => ['type' => ['string', 'null']], 'field' => ['type' => 'string'], 'code' => ['type' => 'string'], 'message' => ['type' => 'string']]]])]
+    #[ApiProperty(schema: ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['row' => ['type' => 'integer'], 'sku' => ['type' => ['string', 'null']], 'reference' => ['type' => ['string', 'null']], 'location' => ['type' => ['string', 'null']], 'field' => ['type' => 'string'], 'code' => ['type' => 'string'], 'message' => ['type' => 'string']]]])]
     #[Groups(['run:detail'])]
     public array $errors = [];
 

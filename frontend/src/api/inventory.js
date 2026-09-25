@@ -237,6 +237,34 @@ export function useImportProducts() {
   });
 }
 
+export const stockImportResultSchema = z.object({
+  dryRun: z.boolean(),
+  rows: z.number().int(),
+  changed: z.number().int(),
+  unchanged: z.number().int(),
+  failed: z.number().int(),
+  errors: z.array(
+    z.object({ row: z.number().int(), sku: z.string().nullable(), location: z.string().nullable(), field: z.string(), code: z.string(), message: z.string() }),
+  ),
+  importRunId: z.string().nullish(),
+});
+
+/** `{ file, dryRun }`: counted quantities per SKU and location (ADR-0016); a dry run is the preview. */
+export function useImportStock() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ file, dryRun }) =>
+      stockImportResultSchema.parse(await api(`/api/stock-imports?${importQuery(file, dryRun)}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } })),
+    onSuccess: (result) => {
+      if (result.dryRun) return;
+      for (const queryKey of [['inventoryLevels'], ['movements'], ['products'], ['product'], ['importRuns']]) {
+        queryClient.invalidateQueries({ queryKey });
+      }
+    },
+  });
+}
+
 const fieldValue = z.union([z.string(), z.number(), z.null()]);
 
 export const productEventSchema = z.object({

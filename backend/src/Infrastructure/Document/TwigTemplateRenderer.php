@@ -32,8 +32,8 @@ final class TwigTemplateRenderer implements TemplateRendererInterface
         ]);
     }
 
-    public function render(DocumentType $type, array $data): string
+    public function render(DocumentType $type, array $data, bool $batch = false): string
     {
-        return $this->twig->render($type->template(), $data);
+        return $this->twig->render($batch ? $type->batchTemplate() : $type->template(), $data);
     }
 }

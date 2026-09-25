@@ -12,7 +12,7 @@ interface ImportRunStoreInterface
     public function findById(string $id): ?ImportRun;
 
     /**
-     * Newest first. The `type` filter (products or orders) narrows the list.
+     * Newest first. The `type` filter (products, orders or stock) narrows the list.
      *
      * @return Page<ImportRun>
      */

@@ -2,7 +2,7 @@
 <html lang="{{ locale }}">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}{% endblock %} {{ order.number }}</title>
+    <title>{% block title %}{% endblock %}</title>
     <style>
         @page { margin: 18mm 16mm 20mm 16mm; }
         body { font-family: "DejaVu Sans", sans-serif; font-size: 10pt; color: #111; }
@@ -18,6 +18,7 @@
         table.lines .num { text-align: right; white-space: nowrap; }
         table.lines .sku { font-family: "DejaVu Sans Mono", monospace; font-size: 9pt; white-space: nowrap; }
         table.lines tfoot td { border-bottom: none; font-weight: bold; }
+        table.lines th.continued { text-transform: none; letter-spacing: 0; border-bottom: none; padding: 0 2mm 1mm 2mm; }
         .box { display: inline-block; width: 4mm; height: 4mm; border: 1pt solid #111; }
         .sign { margin-top: 8mm; width: 100%; page-break-inside: avoid; }
         .sign td { width: 50%; padding-right: 8mm; }
@@ -29,7 +30,7 @@
 </head>
 <body>
     <div class="footer">
-        {{ labels.order }} {{ order.number }} · {{ labels.generated }} {{ generatedAt }}
+        {% block footer %}{{ labels.order }} {{ order.number }}{% endblock %} · {{ labels.generated }} {{ generatedAt }}
     </div>
     {% block body %}{% endblock %}
 </body>

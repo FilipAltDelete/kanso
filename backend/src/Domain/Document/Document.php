@@ -14,10 +14,15 @@ use Symfony\Component\Uid\Uuid;
  * requested, rendered by a worker, stored in object storage. The order's
  * version is part of the request, so an unchanged order hands back the
  * document it already has, and a changed one gets a fresh one.
+ *
+ * A batch document (forOrders()) is one PDF for several orders, each on its
+ * own pages: it has no single order, but the list of orders with the
+ * versions they were requested at, and a key made of them for reuse.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'document')]
 #[ORM\Index(name: 'idx_document_order', columns: ['order_id', 'type', 'locale', 'order_version'])]
+#[ORM\Index(name: 'idx_document_batch', columns: ['batch_key'])]
 class Document
 {
     public const int MAX_ERROR_LENGTH = 500;
@@ -29,15 +34,29 @@ class Document
     #[ORM\Column(length: 32, enumType: DocumentType::class)]
     private DocumentType $type;
 
-    #[ORM\Column(name: 'order_id', type: UuidType::NAME)]
-    private Uuid $orderId;
+    /** Null for a batch document. */
+    #[ORM\Column(name: 'order_id', type: UuidType::NAME, nullable: true)]
+    private ?Uuid $orderId;
 
     /** Copied for the file name. */
-    #[ORM\Column(name: 'order_number', length: 32)]
-    private string $orderNumber;
+    #[ORM\Column(name: 'order_number', length: 32, nullable: true)]
+    private ?string $orderNumber;
 
-    #[ORM\Column(name: 'order_version', type: 'integer')]
-    private int $orderVersion;
+    #[ORM\Column(name: 'order_version', type: 'integer', nullable: true)]
+    private ?int $orderVersion;
+
+    /**
+     * A batch document's orders, in the order they are printed, with the
+     * versions they had when it was requested.
+     *
+     * @var list<array{id: string, number: string, version: int}>|null
+     */
+    #[ORM\Column(name: 'batch_orders', type: 'json', nullable: true)]
+    private ?array $batchOrders = null;
+
+    /** A batch document's type, language and orders at their versions, hashed: the same request gets the same document. */
+    #[ORM\Column(name: 'batch_key', length: 64, nullable: true)]
+    private ?string $batchKey = null;
 
     /** The language the document is written in: `sv` or `en`. */
     #[ORM\Column(length: 8)]
@@ -77,9 +96,9 @@ class Document
 
     public function __construct(
         DocumentType $type,
-        Uuid $orderId,
-        string $orderNumber,
-        int $orderVersion,
+        ?Uuid $orderId,
+        ?string $orderNumber,
+        ?int $orderVersion,
         string $locale,
         Actor $requestedBy,
         \DateTimeImmutable $now,
@@ -97,6 +116,39 @@ class Document
         $this->requestedById = $requestedBy->id;
         $this->requestedByName = $requestedBy->name;
         $this->createdAt = $now;
+    }
+
+    /**
+     * One PDF for several orders. Its key covers the type, the language and
+     * every order at its version, so asking again for the same unchanged
+     * orders finds it.
+     *
+     * @param non-empty-list<array{id: string, number: string, version: int}> $orders in print order
+     */
+    public static function forOrders(DocumentType $type, array $orders, string $locale, Actor $requestedBy, \DateTimeImmutable $now): self
+    {
+        $document = new self($type, null, null, null, $locale, $requestedBy, $now);
+        $document->batchOrders = $orders;
+        $document->batchKey = self::batchKey($type, $orders, $locale);
+
+        return $document;
+    }
+
+    /** @param list<array{id: string, number: string, version: int}> $orders */
+    public static function batchKey(DocumentType $type, array $orders, string $locale): string
+    {
+        return hash('sha256', implode('|', [$type->value, $locale, ...array_map(static fn (array $order): string => $order['id'].':'.$order['version'], $orders)]));
+    }
+
+    public function isBatch(): bool
+    {
+        return null !== $this->batchOrders;
+    }
+
+    /** @return list<array{id: string, number: string, version: int}> a batch document's orders; empty for one order's */
+    public function batchOrders(): array
+    {
+        return $this->batchOrders ?? [];
     }
 
     public function start(): void
@@ -128,13 +180,21 @@ class Document
         return \sprintf('documents/%s.pdf', $this->id);
     }
 
-    /** What the browser saves it as, e.g. `pick-list-10001.pdf`, or `packing-slip-10001-2.pdf` for the second shipment. */
+    /**
+     * What the browser saves it as, e.g. `pick-list-10001.pdf`, or
+     * `packing-slip-10001-2.pdf` for the second shipment. A batch is named by
+     * when it was asked for (UTC): `pick-lists-20260925-1432.pdf`.
+     */
     public function filename(): string
     {
+        if ($this->isBatch()) {
+            return \sprintf('%ss-%s.pdf', str_replace('_', '-', $this->type->value), $this->createdAt->setTimezone(new \DateTimeZone('UTC'))->format('Ymd-Hi'));
+        }
+
         return \sprintf(
             '%s-%s%s.pdf',
             str_replace('_', '-', $this->type->value),
-            preg_replace('/[^A-Za-z0-9-]/', '', $this->orderNumber),
+            preg_replace('/[^A-Za-z0-9-]/', '', (string) $this->orderNumber),
             null === $this->shipmentNumber ? '' : '-'.$this->shipmentNumber,
         );
     }
@@ -154,17 +214,17 @@ class Document
         return $this->type;
     }
 
-    public function orderId(): Uuid
+    public function orderId(): ?Uuid
     {
         return $this->orderId;
     }
 
-    public function orderNumber(): string
+    public function orderNumber(): ?string
     {
         return $this->orderNumber;
     }
 
-    public function orderVersion(): int
+    public function orderVersion(): ?int
     {
         return $this->orderVersion;
     }

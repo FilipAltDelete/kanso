@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ArrowRightLeft, FileUp, Plus, Tag, X } from 'lucide-react';
+import { ArrowRightLeft, FileText, FileUp, Plus, Printer, Tag, X } from 'lucide-react';
 import { AWAITING_FULFILLMENT, ORDER_STATUSES, PAYMENT_STATUSES, useChannels, useOrders, useOrderTags } from '../../api/orders.js';
 import { ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
+import { BulkPrintDialog } from './BulkPrintDialog.jsx';
 import { BulkTagDialog } from './BulkTagDialog.jsx';
 import { BulkTransitionDialog } from './BulkTransitionDialog.jsx';
 import { useOrderListShortcuts } from './orderShortcuts.js';
@@ -31,6 +32,8 @@ export function OrderListPage() {
   const [tagging, setTagging] = useState(null);
   // The bulk status dialog: { ids, rows, clear } while open.
   const [moving, setMoving] = useState(null);
+  // The bulk print dialog: { type, ids } while open.
+  const [printing, setPrinting] = useState(null);
   const [notice, setNotice] = useState('');
   useOrderListShortcuts({ canOperate, onNothingSelected: () => setNotice(t('shortcuts.orders.selectFirst')) });
 
@@ -114,14 +117,18 @@ export function OrderListPage() {
   );
 
   const bulkActions = useMemo(
-    () =>
-      canOperate
+    () => [
+      ...(canOperate
         ? [
             { id: 'change-status', label: t('bulkTransition.open'), icon: ArrowRightLeft, onClick: ({ ids, rows, clear }) => setMoving({ ids, rows, clear }) },
             { id: 'add-tag', label: t('orders.bulk.addTag'), icon: Tag, onClick: ({ ids, clear }) => setTagging({ mode: 'add', ids, clear }) },
             { id: 'remove-tag', label: t('orders.bulk.removeTag'), icon: X, onClick: ({ ids, clear }) => setTagging({ mode: 'remove', ids, clear }) },
           ]
-        : [],
+        : []),
+      // Printing only reads orders, so anyone signed in may (ADR-0007).
+      { id: 'print-pick-lists', label: t('bulkPrint.action.pick_list'), icon: Printer, onClick: ({ ids }) => setPrinting({ type: 'pick_list', ids }) },
+      { id: 'print-packing-slips', label: t('bulkPrint.action.packing_slip'), icon: FileText, onClick: ({ ids }) => setPrinting({ type: 'packing_slip', ids }) },
+    ],
     [canOperate, t],
   );
 
@@ -186,6 +193,8 @@ export function OrderListPage() {
           }}
         />
       ) : null}
+
+      {printing ? <BulkPrintDialog type={printing.type} ids={printing.ids} onClose={() => setPrinting(null)} /> : null}
 
       {tagging ? (
         <BulkTagDialog

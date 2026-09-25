@@ -1,0 +1,68 @@
+{# One order's packing slip: the body of packing_slip.html.twig, and one order's pages in packing_slip_batch.html.twig. #}
+    <h1>{{ labels.packing_slip }}</h1>
+
+    <table class="meta">
+        <tr>
+            <td>
+                <dl>
+                    <dt>{{ labels.ship_to }}</dt>
+                    <dd class="address">{% for line in shipTo %}{{ line }}<br>{% endfor %}</dd>
+                    {% if billTo %}
+                        <dt>{{ labels.bill_to }}</dt>
+                        <dd class="address">{% for line in billTo %}{{ line }}<br>{% endfor %}</dd>
+                    {% endif %}
+                </dl>
+            </td>
+            <td>
+                <dl>
+                    <dt>{{ labels.order }}</dt>
+                    <dd><strong>{{ order.number }}</strong></dd>
+                    <dt>{{ labels.placed }}</dt>
+                    <dd>{{ order.placedAt }}</dd>
+                    <dt>{{ labels.customer }}</dt>
+                    <dd>{{ order.customerName }}{% if order.customerEmail %}<br>{{ order.customerEmail }}{% endif %}</dd>
+                    {% if shipment %}
+                    <dt>{{ labels.shipment }}</dt>
+                    <dd><strong>{{ shipment.number }}</strong> · {{ labels.shipped }} {{ shipment.shippedAt }}</dd>
+                    {% if shipment.carrier or shipment.trackingNumber %}
+                    <dt>{{ labels.tracking_number }}</dt>
+                    <dd>{{ shipment.carrier }} {{ shipment.trackingNumber }}</dd>
+                    {% endif %}
+                    {% endif %}
+                </dl>
+            </td>
+        </tr>
+    </table>
+
+    {# No prices: a packing slip lists what is in the parcel, and may travel with a gift. #}
+    <table class="lines">
+        <thead>
+            {% if batch is defined %}
+            {# The header repeats on every page, so a long order's second page still says whose it is. #}
+            <tr><th colspan="3" class="continued">{{ labels.order }} {{ order.number }}</th></tr>
+            {% endif %}
+            <tr>
+                <th>{{ labels.sku }}</th>
+                <th>{{ labels.product }}</th>
+                <th class="num">{{ labels.quantity }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in lines %}
+                <tr>
+                    <td class="sku">{{ line.sku }}</td>
+                    <td>{{ line.name }}</td>
+                    <td class="num">{{ line.quantity }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td></td>
+                <td>{{ labels.total_units }}</td>
+                <td class="num">{{ totalUnits }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <p style="margin-top: 10mm;">{{ labels.thanks }}</p>

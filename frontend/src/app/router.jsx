@@ -11,6 +11,7 @@ import { LocationsPage } from '../features/inventory/LocationsPage.jsx';
 import { ProductDetailPage } from '../features/inventory/ProductDetailPage.jsx';
 import { ProductImportPage } from '../features/inventory/ProductImportPage.jsx';
 import { ProductsPage } from '../features/inventory/ProductsPage.jsx';
+import { StockImportPage } from '../features/inventory/StockImportPage.jsx';
 import { SettingsPage } from '../features/settings/SettingsPage.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 
@@ -61,6 +62,8 @@ export function buildRouteTree() {
 
   const locationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/locations', component: LocationsPage });
 
+  const stockImportRoute = createRoute({ getParentRoute: () => rootRoute, path: '/stock/import', component: StockImportPage });
+
   const orderRoutes = [
     createRoute({ getParentRoute: () => rootRoute, path: '/orders', component: OrderListPage }),
     // A literal segment outranks a parameter, so /orders/new and /orders/import never read as an order id.
@@ -87,5 +90,5 @@ export function buildRouteTree() {
       ]
     : [];
 
-  return rootRoute.addChildren([dashboardRoute, ...orderRoutes, ...customerRoutes, productsRoute, productImportRoute, productRoute, locationsRoute, settingsRoute, ...devRoutes]);
+  return rootRoute.addChildren([dashboardRoute, ...orderRoutes, ...customerRoutes, productsRoute, productImportRoute, productRoute, locationsRoute, stockImportRoute, settingsRoute, ...devRoutes]);
 }
