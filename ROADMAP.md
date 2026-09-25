@@ -76,6 +76,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [ ] Editing orders, partial cancel, notes and tags; payment status
 - [x] Pick lists and packing slips as PDFs (Swedish or English): Twig + dompdf in a worker, stored in S3/MinIO, downloaded through a five-minute signed link; "Print" on the order page (`docs/adr/0007`)
 - [x] Shipments: ship some lines or part of a line, with carrier and tracking number typed in; each shipment takes its units off on hand and off the reservation in one transaction with the order's version; the order becomes shipped when the last unit does; "Ship" dialog and shipment list on the order page (`docs/adr/0009`)
+- [x] Dashboard with real numbers: orders today, awaiting fulfillment, shipped today, orders by status and stock-outs for the browser's calendar day, refreshed every 30 s, each linking to its list (`GET /api/dashboard`)
 
 ---
 

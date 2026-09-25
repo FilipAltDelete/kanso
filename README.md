@@ -54,6 +54,7 @@ make logs / down / reset
 - `GET /health/live`, `GET /health/ready`
 - `GET/POST /api/customers` (`?q=` searches name and email, `?sort=name,-createdAt`, `?page=`, `?itemsPerPage=`), `GET/PATCH /api/customers/{id}` (merge patch), `GET /api/customers/{id}/history`; a customer's orders are `GET /api/orders?customer={id}`. Reading needs a sign-in; writing the operator role.
 - `POST /api/orders/{id}/documents` (`{"type": "pick_list" | "packing_slip", "locale": "sv" | "en"}`) queues a PDF; poll `GET /api/documents/{id}` until `status` is `done`, then open its `downloadUrl` (signed, five minutes). Needs a running worker (`docs/adr/0007`).
+- `GET /api/dashboard?timeZone=Europe/Stockholm`: orders placed and shipped today (the caller's calendar day), orders awaiting fulfillment, orders by status, and stock-outs.
 - `GET /api/docs.json` — OpenAPI document (authenticated)
 
 Errors are RFC 7807 problem responses (`application/problem+json`).

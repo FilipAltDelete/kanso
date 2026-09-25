@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { api } from './client.js';
 
 export const ORDER_STATUSES = ['pending', 'confirmed', 'allocated', 'picking', 'packed', 'shipped', 'delivered', 'cancelled', 'on_hold'];
+/** Confirmed but not yet shipped: the warehouse's queue (the dashboard counts the same). */
+export const AWAITING_FULFILLMENT = ['confirmed', 'allocated', 'picking', 'packed'];
 export const TRANSITIONS = ['confirm', 'allocate', 'start_picking', 'pack', 'ship', 'deliver', 'cancel', 'hold', 'release'];
 
 // The API leaves null fields out of a response, so an optional field may be null or missing.

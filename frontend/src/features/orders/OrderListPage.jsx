@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { FileUp, Plus } from 'lucide-react';
-import { ORDER_STATUSES, useChannels, useOrders } from '../../api/orders.js';
+import { AWAITING_FULFILLMENT, ORDER_STATUSES, useChannels, useOrders } from '../../api/orders.js';
 import { ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
 import { useI18n } from '../../lib/i18n.jsx';
@@ -56,7 +56,15 @@ export function OrderListPage() {
         id: 'status',
         accessorKey: 'status',
         header: t('order.status'),
-        meta: { filter: { options: ORDER_STATUSES.map((status) => ({ value: status, label: t(`orderStatus.${status}`) })) } },
+        meta: {
+          filter: {
+            options: [
+              // Several statuses at once: the API takes a comma-separated list.
+              { value: AWAITING_FULFILLMENT.join(','), label: t('kpi.awaitingFulfillment') },
+              ...ORDER_STATUSES.map((status) => ({ value: status, label: t(`orderStatus.${status}`) })),
+            ],
+          },
+        },
         cell: ({ getValue }) => <StatusBadge status={getValue()} />,
       },
       { id: 'lineCount', accessorKey: 'lineCount', header: t('order.lines'), enableSorting: false, meta: { align: 'end' } },
