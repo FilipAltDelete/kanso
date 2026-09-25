@@ -29,6 +29,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] UI shell: login, navigation, empty dashboard, Swedish/English
 - [x] CI: lint, static analysis, tests, image builds (GitHub Actions)
 - [x] Domain model draft (`docs/domain-model.md`)
+- [x] Customer-specific code: core packaged as `kanso/core` + `kanso/contracts`, `project/` skeleton with a sample bundle (`docs/adr/0003`, `docs/extensions.md`)
 - [ ] Deploy target: where images are pushed and which host runs staging/production (open decision)
 - [ ] Metrics and tracing (Prometheus, OpenTelemetry) — only Monolog JSON logging so far
 - [ ] Table component for Phase 1 lists

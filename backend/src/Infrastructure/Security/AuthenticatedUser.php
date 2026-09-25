@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Infrastructure\Security;
+namespace Kanso\Core\Internal\Infrastructure\Security;
 
-use Kanso\Domain\User\Role;
-use Kanso\Domain\User\User;
+use Kanso\Core\Internal\Domain\User\Role;
+use Kanso\Core\Internal\Domain\User\User;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Api\Controller;
+namespace Kanso\Core\Internal\Api\Controller;
 
-use Kanso\Domain\Health\HealthCheckInterface;
+use Kanso\Core\Internal\Domain\Health\HealthCheckInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 

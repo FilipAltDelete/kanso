@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Application\User;
+namespace Kanso\Core\Internal\Application\User;
 
-use Kanso\Application\Exception\ValidationFailed;
-use Kanso\Domain\Security\PasswordHasherInterface;
-use Kanso\Domain\User\Role;
-use Kanso\Domain\User\User;
-use Kanso\Domain\User\UserStoreInterface;
+use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
+use Kanso\Core\Internal\Domain\User\Role;
+use Kanso\Core\Internal\Domain\User\User;
+use Kanso\Core\Internal\Domain\User\UserStoreInterface;
 use Psr\Clock\ClockInterface;
 
 final class UserService

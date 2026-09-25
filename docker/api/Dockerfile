@@ -33,6 +33,8 @@ RUN mkdir -p /tmp/composer && chmod 0777 /tmp/composer
 # ------------------------------------------------------------------- build
 FROM toolchain AS build
 COPY backend/composer.json backend/composer.lock ./
+# A path repository: composer needs the contracts package before the rest of the source.
+COPY backend/contracts/ ./contracts/
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-progress
 COPY backend/ ./
 COPY docker/api/php.ini /usr/local/etc/php/conf.d/zz-kanso.ini
@@ -53,7 +55,7 @@ COPY docker/api/php.ini /usr/local/etc/php/conf.d/zz-kanso.ini
 COPY --from=build --chown=$UID /app /app
 USER $UID
 STOPSIGNAL SIGTERM
-CMD ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--memory-limit=256M", "--limit=1000"]
+CMD ["php", "bin/console", "messenger:consume", "async", "ext", "--time-limit=3600", "--memory-limit=256M", "--limit=1000"]
 
 FROM app AS worker
 

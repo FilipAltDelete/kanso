@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <!-- Acme's tests, run against this build: the core with Acme's bundle in it. -->
+        <testsuite name="acme">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <php>
+        <ini name="display_errors" value="1"/>
+        <server name="APP_ENV" value="test" force="true"/>
+        <server name="APP_DEBUG" value="1"/>
+        <server name="SHELL_VERBOSITY" value="-1"/>
+        <server name="KERNEL_CLASS" value="Acme\Kernel"/>
+        <env name="APP_SECRET" value="test"/>
+        <!-- Forced, so a shell that points DATABASE_URL at a real installation
+             can never have its data touched by a test run. Its own database and
+             Redis number, so it can run beside the core's suite. -->
+        <env name="DATABASE_URL" value="mysql://kanso:kanso@mysql:3306/kanso_project_test?serverVersion=8.4.0&amp;charset=utf8mb4" force="true"/>
+        <env name="KANSO_TEST_REDIS_DB" value="14" force="true"/>
+        <env name="REDIS_URL" value="redis://redis:6379"/>
+        <env name="MESSENGER_TRANSPORT_DSN" value="doctrine://default"/>
+    </php>
+</phpunit>

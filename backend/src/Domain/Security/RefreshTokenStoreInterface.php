@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Domain\Security;
+namespace Kanso\Core\Internal\Domain\Security;
 
 interface RefreshTokenStoreInterface
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Domain\Security;
+namespace Kanso\Core\Internal\Domain\Security;
 
-use Kanso\Domain\User\User;
+use Kanso\Core\Internal\Domain\User\User;
 
 interface AccessTokenIssuerInterface
 {

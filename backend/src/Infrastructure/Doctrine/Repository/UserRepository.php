@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Infrastructure\Doctrine\Repository;
+namespace Kanso\Core\Internal\Infrastructure\Doctrine\Repository;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Kanso\Domain\User\User;
-use Kanso\Domain\User\UserStoreInterface;
+use Kanso\Core\Internal\Domain\User\User;
+use Kanso\Core\Internal\Domain\User\UserStoreInterface;
 use Symfony\Component\Uid\Uuid;
 
 final class UserRepository implements UserStoreInterface

@@ -1,0 +1,13 @@
+# The core's routes. Without this line the installation has no API.
+kanso_core:
+    resource: '@KansoCoreBundle/config/routes.yaml'
+
+# Acme's own controllers, under a prefix the core will never use. `namespace`
+# belongs inside `resource`: one bad key and the loader refuses the whole file,
+# leaving the project with no routes at all, the core's included.
+acme_controllers:
+    resource:
+        path: '../src/AcmeBundle/Controller/'
+        namespace: 'Acme\AcmeBundle\Controller'
+    type: attribute
+    prefix: /api/ext/acme

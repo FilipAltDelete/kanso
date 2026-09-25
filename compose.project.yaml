@@ -1,0 +1,33 @@
+# Runs the local stack from the customer project skeleton (project/) instead of
+# the reference installation in backend/, the way a customer's installation
+# runs: the project's kernel with KansoCoreBundle and AcmeBundle.
+#
+#   make project-install && make project-up
+#
+# Back to the reference installation: `make up`.
+#
+# The project is mounted at /app and the core beside it at /backend, which is
+# where project/vendor/kanso/core (a symlink to ../../../backend) lands. Same
+# database as the reference installation.
+
+services:
+  migrate:
+    volumes: !override
+      - ./project:/app
+      - ./backend:/backend
+      - ./docker/api/php-dev.ini:/usr/local/etc/php/conf.d/zz-kanso.ini:ro
+  install:
+    volumes: !override
+      - ./project:/app
+      - ./backend:/backend
+      - ./docker/api/php-dev.ini:/usr/local/etc/php/conf.d/zz-kanso.ini:ro
+  api:
+    volumes: !override
+      - ./project:/app
+      - ./backend:/backend
+      - ./docker/api/php-dev.ini:/usr/local/etc/php/conf.d/zz-kanso.ini:ro
+  worker:
+    volumes: !override
+      - ./project:/app
+      - ./backend:/backend
+      - ./docker/api/php-dev.ini:/usr/local/etc/php/conf.d/zz-kanso.ini:ro

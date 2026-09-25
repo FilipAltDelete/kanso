@@ -7,7 +7,7 @@ COMPOSE := docker compose
 TOOLS := $(COMPOSE) run --rm --no-deps tools
 NODE := $(COMPOSE) run --rm --no-deps frontend
 
-.PHONY: help install keys up down reset logs shell migrate user test lint stan deptrac cs fix front-install front-lint front-test front-build
+.PHONY: help install keys up down reset logs shell migrate user test lint stan deptrac cs fix front-install front-lint front-test front-build project-install project-up project-check project-test
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -71,3 +71,24 @@ front-test: ## Test the frontend
 
 front-build: ## Build the frontend bundle
 	$(NODE) npm run build
+
+# The customer project skeleton (project/, docs/extensions.md): the core as a
+# Composer package plus Acme's bundle. The whole repository is mounted so the
+# project's path repositories (../backend) resolve.
+PROJECT := $(COMPOSE) run --rm --no-deps -v "$(PWD)":/repo -w /repo/project tools
+
+project-install: ## Install the customer project skeleton (project/)
+	$(PROJECT) composer install --no-interaction
+
+project-up: keys ## Run the stack from project/ instead of backend/ (make up to switch back)
+	$(COMPOSE) -f compose.yaml -f compose.project.yaml up -d --build --force-recreate api worker frontend proxy
+
+project-check: ## PHPStan on project/ (incl. the no-internals rule) and a routing check
+	$(PROJECT) vendor/bin/phpstan analyse --no-progress
+	@# The container booting is not the same as the project having an API: one bad
+	@# key in routes.yaml and the loader drops the whole file, the core's routes too.
+	$(PROJECT) sh -c 'routes=$$(bin/console debug:router --format=txt) && for r in /api/auth/login /api/ext/acme/erp-sync; do echo "$$routes" | grep -q " $$r" || { echo "missing route $$r"; exit 1; }; done'
+
+project-test: ## The project's tests, against its own database (kanso_project_test)
+	@$(COMPOSE) exec -T mysql mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS kanso_project_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; GRANT ALL PRIVILEGES ON kanso_project_test.* TO 'kanso'@'%';" 2>/dev/null
+	$(COMPOSE) run --rm --no-deps -e APP_ENV=test -v "$(PWD)":/repo -w /repo/project tools vendor/bin/phpunit $(ARGS)

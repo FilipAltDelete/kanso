@@ -1,5 +1,5 @@
 doctrine_migrations:
     migrations_paths:
-        'Kanso\Migrations': '%kernel.project_dir%/migrations'
+        'Kanso\Core\Migrations': '%kanso.core_dir%/migrations'
     enable_profiler: false
     # Hand-written only: never `doctrine:migrations:diff` or `doctrine:schema:update`.

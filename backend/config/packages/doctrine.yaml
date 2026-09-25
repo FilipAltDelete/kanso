@@ -20,8 +20,8 @@ doctrine:
             Domain:
                 type: attribute
                 is_bundle: false
-                dir: '%kernel.project_dir%/src/Domain'
-                prefix: 'Kanso\Domain'
+                dir: '%kanso.core_dir%/src/Domain'
+                prefix: 'Kanso\Core\Internal\Domain'
                 alias: Domain
 
 when@prod:

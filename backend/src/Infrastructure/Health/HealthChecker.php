@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Infrastructure\Health;
+namespace Kanso\Core\Internal\Infrastructure\Health;
 
 use Doctrine\DBAL\Connection;
-use Kanso\Domain\Health\HealthCheckInterface;
+use Kanso\Core\Internal\Domain\Health\HealthCheckInterface;
 
 final class HealthChecker implements HealthCheckInterface
 {

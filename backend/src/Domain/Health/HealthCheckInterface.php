@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Domain\Health;
+namespace Kanso\Core\Internal\Domain\Health;
 
 interface HealthCheckInterface
 {

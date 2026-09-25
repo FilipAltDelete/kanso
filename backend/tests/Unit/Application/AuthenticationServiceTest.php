@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Tests\Unit\Application;
+namespace Kanso\Core\Tests\Unit\Application;
 
-use Kanso\Application\Exception\AuthenticationFailed;
-use Kanso\Application\Exception\TooManyAttempts;
-use Kanso\Application\Security\AuthenticationService;
-use Kanso\Domain\Security\AccessTokenIssuerInterface;
-use Kanso\Domain\Security\PasswordHasherInterface;
-use Kanso\Domain\Security\RefreshTokenStoreInterface;
-use Kanso\Domain\User\Role;
-use Kanso\Domain\User\User;
-use Kanso\Domain\User\UserStoreInterface;
+use Kanso\Core\Internal\Application\Exception\AuthenticationFailed;
+use Kanso\Core\Internal\Application\Exception\TooManyAttempts;
+use Kanso\Core\Internal\Application\Security\AuthenticationService;
+use Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface;
+use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
+use Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface;
+use Kanso\Core\Internal\Domain\User\Role;
+use Kanso\Core\Internal\Domain\User\User;
+use Kanso\Core\Internal\Domain\User\UserStoreInterface;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;

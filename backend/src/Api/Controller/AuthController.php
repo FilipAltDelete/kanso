@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Api\Controller;
+namespace Kanso\Core\Internal\Api\Controller;
 
-use Kanso\Application\Exception\ValidationFailed;
-use Kanso\Application\Security\AuthenticationService;
-use Kanso\Domain\Security\IssuedTokens;
+use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Application\Security\AuthenticationService;
+use Kanso\Core\Internal\Domain\Security\IssuedTokens;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;

@@ -1,0 +1,16 @@
+# Acme's services. The core's arrive from KansoCoreBundle; nothing here needs
+# to know how they are wired.
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    Acme\AcmeBundle\:
+        resource: '../src/AcmeBundle/'
+        exclude:
+            - '../src/AcmeBundle/AcmeBundle.php'
+            - '../src/AcmeBundle/Message/'
+
+    Acme\AcmeBundle\Controller\:
+        resource: '../src/AcmeBundle/Controller/'
+        tags: ['controller.service_arguments']

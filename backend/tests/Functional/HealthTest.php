@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Tests\Functional;
+namespace Kanso\Core\Tests\Functional;
 
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 

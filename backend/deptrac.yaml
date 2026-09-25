@@ -1,8 +1,14 @@
 # Layer boundaries (same as Pimsen): Api/Cli -> Application -> Domain <- Infrastructure.
+# Contracts is the public API and depends on nothing internal (docs/extensions.md).
 deptrac:
   paths:
     - ./src
+    - ./contracts
   layers:
+    - name: Contracts
+      collectors:
+        - type: directory
+          value: contracts/.*
     - name: Domain
       collectors:
         - type: directory
@@ -23,21 +29,32 @@ deptrac:
       collectors:
         - type: directory
           value: src/Cli/.*
+    # The two entry points: the kernel the reference installation boots, and
+    # the bundle a customer project registers.
     - name: Kernel
       collectors:
         - type: classLike
-          value: ^Kanso\\Kernel$
+          value: ^Kanso\\Core\\Internal\\Kernel$
+        - type: classLike
+          value: ^Kanso\\Core\\KansoCoreBundle$
 
   ruleset:
-    Domain: ~
+    Contracts: ~
+    Domain:
+      - Contracts
     Application:
+      - Contracts
       - Domain
     Infrastructure:
+      - Contracts
       - Domain
     Api:
+      - Contracts
       - Domain
       - Application
     Cli:
+      - Contracts
       - Domain
       - Application
-    Kernel: ~
+    Kernel:
+      - Contracts

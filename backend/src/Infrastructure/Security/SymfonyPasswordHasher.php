@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Infrastructure\Security;
+namespace Kanso\Core\Internal\Infrastructure\Security;
 
-use Kanso\Domain\Security\PasswordHasherInterface;
+use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
 use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface;
 use Symfony\Component\PasswordHasher\PasswordHasherInterface as SymfonyHasher;
 

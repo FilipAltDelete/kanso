@@ -143,7 +143,7 @@ services:
     depends_on:
       install: {condition: service_completed_successfully}
     # Workers exit on purpose when they hit their limits; restart brings them back.
-    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--memory-limit=256M", "--limit=1000"]
+    command: ["php", "bin/console", "messenger:consume", "async", "ext", "--time-limit=3600", "--memory-limit=256M", "--limit=1000"]
     restart: always
 
   frontend:

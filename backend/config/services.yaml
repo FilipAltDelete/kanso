@@ -14,29 +14,30 @@ services:
             $environment: '%kernel.environment%'
             $loginLimiter: '@limiter.login'
 
-    Kanso\:
+    Kanso\Core\Internal\:
         resource: '../src/'
         exclude:
             - '../src/Kernel.php'
+            - '../src/KansoCoreBundle.php'
             - '../src/Domain/User/User.php'
             - '../src/Domain/User/Role.php'
             - '../src/Domain/Security/IssuedTokens.php'
             - '../src/Application/Exception/'
             - '../src/Api/Resource/'
 
-    Kanso\Api\Controller\:
+    Kanso\Core\Internal\Api\Controller\:
         resource: '../src/Api/Controller/'
         tags: ['controller.service_arguments']
 
     # Layering: Api/Cli -> Application -> Domain <- Infrastructure. The layers
     # above depend on these Domain interfaces; Infrastructure implements them.
-    Kanso\Domain\User\UserStoreInterface: '@Kanso\Infrastructure\Doctrine\Repository\UserRepository'
-    Kanso\Domain\Security\PasswordHasherInterface: '@Kanso\Infrastructure\Security\SymfonyPasswordHasher'
-    Kanso\Domain\Security\AccessTokenIssuerInterface: '@Kanso\Infrastructure\Security\LexikAccessTokenIssuer'
-    Kanso\Domain\Security\RefreshTokenStoreInterface: '@Kanso\Infrastructure\Security\RedisRefreshTokenStore'
-    Kanso\Domain\Health\HealthCheckInterface: '@Kanso\Infrastructure\Health\HealthChecker'
+    Kanso\Core\Internal\Domain\User\UserStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\UserRepository'
+    Kanso\Core\Internal\Domain\Security\PasswordHasherInterface: '@Kanso\Core\Internal\Infrastructure\Security\SymfonyPasswordHasher'
+    Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface: '@Kanso\Core\Internal\Infrastructure\Security\LexikAccessTokenIssuer'
+    Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface: '@Kanso\Core\Internal\Infrastructure\Security\RedisRefreshTokenStore'
+    Kanso\Core\Internal\Domain\Health\HealthCheckInterface: '@Kanso\Core\Internal\Infrastructure\Health\HealthChecker'
 
-    Kanso\Infrastructure\Security\LexikAccessTokenIssuer:
+    Kanso\Core\Internal\Infrastructure\Security\LexikAccessTokenIssuer:
         arguments:
             $ttl: '%lexik_jwt_authentication.token_ttl%'
 

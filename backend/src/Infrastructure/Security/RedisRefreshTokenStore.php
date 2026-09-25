@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Infrastructure\Security;
+namespace Kanso\Core\Internal\Infrastructure\Security;
 
-use Kanso\Domain\Security\RefreshTokenStoreInterface;
+use Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface;
 
 /**
  * Only the hash of a refresh token is stored, so a Redis dump hands out no

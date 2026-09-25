@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Cli;
+namespace Kanso\Core\Internal\Cli;
 
-use Kanso\Application\User\UserService;
-use Kanso\Domain\User\Role;
+use Kanso\Core\Internal\Application\User\UserService;
+use Kanso\Core\Internal\Domain\User\Role;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;

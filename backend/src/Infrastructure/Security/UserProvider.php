@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Infrastructure\Security;
+namespace Kanso\Core\Internal\Infrastructure\Security;
 
-use Kanso\Domain\User\UserStoreInterface;
+use Kanso\Core\Internal\Domain\User\UserStoreInterface;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;

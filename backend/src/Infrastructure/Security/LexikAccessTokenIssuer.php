@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Infrastructure\Security;
+namespace Kanso\Core\Internal\Infrastructure\Security;
 
-use Kanso\Domain\Security\AccessTokenIssuerInterface;
-use Kanso\Domain\User\User;
+use Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface;
+use Kanso\Core\Internal\Domain\User\User;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 final class LexikAccessTokenIssuer implements AccessTokenIssuerInterface

@@ -3,6 +3,8 @@ backend/vendor/
 backend/var/
 backend/.phpunit.cache/
 backend/.php-cs-fixer.cache
+project/vendor/
+project/var/
 frontend/node_modules/
 frontend/dist/
 .git/

@@ -1,0 +1,10 @@
+includes:
+    # The core's rule for extensions: no reaching into Kanso\Core\Internal.
+    - vendor/kanso/contracts/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+        - tests
+    treatPhpDocTypesAsCertain: false

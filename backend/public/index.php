@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Kanso\Kernel;
+use Kanso\Core\Internal\Kernel;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
 

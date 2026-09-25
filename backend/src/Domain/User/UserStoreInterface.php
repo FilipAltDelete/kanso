@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Domain\User;
+namespace Kanso\Core\Internal\Domain\User;
 
 interface UserStoreInterface
 {

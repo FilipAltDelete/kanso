@@ -16,6 +16,19 @@ framework:
                     max_retries: 3
                     delay: 1000
                     multiplier: 3
+            # Kept for customer extensions (project/, docs/extensions.md): their
+            # own queue in the same table, with the core's retry and failure
+            # handling, so a slow integration never holds up the core's jobs.
+            ext:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    queue_name: ext
+                    auto_setup: false
+                    redeliver_timeout: 300
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 3
             failed:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
                 options: { queue_name: failed, auto_setup: false }
@@ -34,4 +47,5 @@ when@test:
         messenger:
             transports:
                 async: 'in-memory://'
+                ext: 'in-memory://'
                 failed: 'in-memory://'

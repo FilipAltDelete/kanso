@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Cli;
+namespace Kanso\Core\Internal\Cli;
 
-use Kanso\Domain\Health\HealthCheckInterface;
+use Kanso\Core\Internal\Domain\Health\HealthCheckInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;

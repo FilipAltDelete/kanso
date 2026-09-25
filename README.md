@@ -21,10 +21,12 @@ Open <http://localhost:8090> and sign in as **admin / admin** (development defau
 
 | Path | What |
 |---|---|
-| `backend/` | Symfony app. `src/{Domain,Application,Infrastructure,Api,Cli}`, layers enforced by deptrac |
+| `backend/` | The core (`kanso/core`), a Symfony bundle. `src/{Domain,Application,Infrastructure,Api,Cli}`, layers enforced by deptrac |
+| `backend/contracts/` | `kanso/contracts`: the public API for customer extensions |
+| `project/` | Customer project skeleton: the core plus a customer's own bundles, e.g. integrations ([docs/extensions.md](docs/extensions.md)) |
 | `frontend/` | React app (plain JavaScript). `src/{api,app,components,features,lib}` |
 | `docker/` | Images (`api`, `worker`, `web`) and the reference proxy |
-| `compose.yaml` | Local reference deployment; `compose.prod.yaml` runs the images as shipped |
+| `compose.yaml` | Local reference deployment; `compose.prod.yaml` runs the images as shipped; `compose.project.yaml` runs it from `project/` |
 
 The `proxy` container routes `/` to the frontend and `/api` and `/health` to the API.
 
@@ -36,6 +38,7 @@ make test                # backend suite (needs `make up`)
 make lint                # php-cs-fixer, PHPStan level 8, deptrac, ESLint
 make front-test          # Vitest
 make user EMAIL=ops@example.com PASSWORD=… ROLE=ROLE_OPERATOR
+make project-test        # the customer project skeleton's tests (make project-install first)
 make logs / down / reset
 ```
 

@@ -4,7 +4,7 @@ api_platform:
     version: '%kanso.version%'
 
     mapping:
-        paths: ['%kernel.project_dir%/src/Api/Resource']
+        paths: ['%kanso.core_dir%/src/Api/Resource']
 
     formats:
         jsonld: ['application/ld+json']

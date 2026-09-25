@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Domain\User;
+namespace Kanso\Core\Internal\Domain\User;
 
 /** The Phase 0 role model; the hierarchy is in config/packages/security.yaml. */
 final class Role

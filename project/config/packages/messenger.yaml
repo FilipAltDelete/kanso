@@ -1,0 +1,8 @@
+# Acme's messages go to `ext`, the transport the core keeps for extensions: its
+# own queue in the same `messenger_messages` table, with the core's retry and
+# failure handling. The core's transports arrive with the bundle; this only
+# adds to the routing map.
+framework:
+    messenger:
+        routing:
+            Acme\AcmeBundle\Message\SyncOrdersToErp: ext

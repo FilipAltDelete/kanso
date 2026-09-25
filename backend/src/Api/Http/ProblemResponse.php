@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Api\Http;
+namespace Kanso\Core\Internal\Api\Http;
 
 use Symfony\Component\HttpFoundation\JsonResponse;
 

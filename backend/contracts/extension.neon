@@ -1,0 +1,11 @@
+# Include this from a customer project's phpstan.neon:
+#
+#     includes:
+#         - vendor/kanso/contracts/extension.neon
+#
+# It fails the build on the one mistake that only hurts later: an extension
+# reaching into Kanso\Core\Internal instead of asking for a contract.
+services:
+    -
+        class: Kanso\Contracts\PhpStan\NoInternalAccessRule
+        tags: [phpstan.rules.rule]

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Application\Exception;
+namespace Kanso\Core\Internal\Application\Exception;
 
 /**
  * A failure the caller can act on. The API turns every one of these into an

@@ -3,7 +3,7 @@
 kanso_controllers:
     resource:
         path: '../src/Api/Controller/'
-        namespace: 'Kanso\Api\Controller'
+        namespace: 'Kanso\Core\Internal\Api\Controller'
     type: attribute
 
 api_platform:

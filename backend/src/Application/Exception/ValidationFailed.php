@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Application\Exception;
+namespace Kanso\Core\Internal\Application\Exception;
 
 final class ValidationFailed extends ApplicationException
 {

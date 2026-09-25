@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Tests\Functional;
+namespace Kanso\Core\Tests\Functional;
 
-use Kanso\Api\Controller\AuthController;
-use Kanso\Application\User\UserService;
-use Kanso\Domain\User\Role;
+use Kanso\Core\Internal\Api\Controller\AuthController;
+use Kanso\Core\Internal\Application\User\UserService;
+use Kanso\Core\Internal\Domain\User\Role;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 

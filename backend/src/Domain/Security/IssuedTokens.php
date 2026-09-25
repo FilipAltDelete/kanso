@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Domain\Security;
+namespace Kanso\Core\Internal\Domain\Security;
 
 /** What a successful login or refresh hands back: a short access token and a long refresh token. */
 final readonly class IssuedTokens

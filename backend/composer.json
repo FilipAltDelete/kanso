@@ -1,8 +1,18 @@
 {
-    "name": "kanso/oms",
-    "description": "Kanso OMS — web-based order management, one installation per customer.",
-    "type": "project",
+    "name": "kanso/core",
+    "description": "Kanso OMS core — web-based order management, one installation per customer.",
+    "type": "library",
     "license": "proprietary",
+    "version": "0.1.0",
+    "repositories": {
+        "kanso-contracts": {
+            "type": "path",
+            "url": "contracts",
+            "options": {
+                "symlink": true
+            }
+        }
+    },
     "require": {
         "php": ">=8.4",
         "ext-ctype": "*",
@@ -17,6 +27,7 @@
         "doctrine/doctrine-bundle": "^2.13",
         "doctrine/doctrine-migrations-bundle": "^3.4",
         "doctrine/orm": "^3.5",
+        "kanso/contracts": "^0.1",
         "lexik/jwt-authentication-bundle": "^3.1",
         "symfony/clock": "^7.4",
         "symfony/console": "^7.4",
@@ -49,13 +60,14 @@
     },
     "autoload": {
         "psr-4": {
-            "Kanso\\": "src/",
-            "Kanso\\Migrations\\": "migrations/"
+            "Kanso\\Core\\": "src/",
+            "Kanso\\Core\\Internal\\": "src/",
+            "Kanso\\Core\\Migrations\\": "migrations/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Kanso\\Tests\\": "tests/"
+            "Kanso\\Core\\Tests\\": "tests/"
         }
     },
     "config": {

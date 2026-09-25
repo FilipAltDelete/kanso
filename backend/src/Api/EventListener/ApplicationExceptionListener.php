@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Api\EventListener;
+namespace Kanso\Core\Internal\Api\EventListener;
 
-use Kanso\Api\Http\ProblemResponse;
-use Kanso\Application\Exception\ApplicationException;
+use Kanso\Core\Internal\Api\Http\ProblemResponse;
+use Kanso\Core\Internal\Application\Exception\ApplicationException;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;

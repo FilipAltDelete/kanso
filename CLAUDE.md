@@ -9,7 +9,9 @@ Kanso uses **the same tech stack and deployment model as Pimsen** (`../pimsen`).
 - Spec: `docs/OMS-SPEC.md` (not yet generated — see `docs/prompts/oms-spec-prompt.md`)
 
 ## Layout
-- `backend/` — Symfony app, namespace `Kanso\`. Layers (enforced by deptrac): `Api`/`Cli` → `Application` → `Domain` ← `Infrastructure`. Api and Cli use Domain interfaces; Infrastructure implements them; aliases live in `config/services.yaml`.
+- `backend/` — the core, Composer package `kanso/core`: `Kanso\Core\KansoCoreBundle` plus `Kanso\Core\Internal\*`. Layers (enforced by deptrac): `Api`/`Cli` → `Application` → `Domain` ← `Infrastructure`. Api and Cli use Domain interfaces; Infrastructure implements them; aliases live in `config/services.yaml`. The bundle prepends `config/packages/*`, so core paths use `%kanso.core_dir%`, not `%kernel.project_dir%`.
+- `backend/contracts/` — `kanso/contracts`, the public API customer extensions code against. Depends on nothing; strict semver.
+- `project/` — customer project skeleton (sample `AcmeBundle`). **Customer-specific code goes in project bundles, never in the core** (`docs/extensions.md`, ADR-0003).
 - `frontend/` — React app: `src/api` (client + Zod schemas), `src/app` (shell, router), `src/features/<area>`, `src/components/ui`, `src/lib` (incl. `i18n.jsx`).
 - `docker/`, `compose.yaml` — images and the reference deployment. The `proxy` routes `/` to the frontend, `/api` and `/health` to the API. Local port **8090** (Pimsen uses 8080).
 
@@ -60,6 +62,7 @@ make test [ARGS="--filter …"]        # phpunit against kanso_test (needs the s
 make lint                            # php-cs-fixer + phpstan (level 8) + deptrac + eslint
 make front-test / front-lint / front-build
 make user EMAIL=… PASSWORD=… ROLE=ROLE_OPERATOR
+make project-install / project-check / project-test / project-up   # the project/ skeleton
 ```
 
 Console: `docker compose run --rm --no-deps tools php bin/console …` — `kanso:install`, `kanso:user:create`, `kanso:health`, `kanso:jwt:generate-keys`.

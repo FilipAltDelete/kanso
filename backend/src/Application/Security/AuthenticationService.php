@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Kanso\Application\Security;
+namespace Kanso\Core\Internal\Application\Security;
 
-use Kanso\Application\Exception\AuthenticationFailed;
-use Kanso\Application\Exception\TooManyAttempts;
-use Kanso\Domain\Security\AccessTokenIssuerInterface;
-use Kanso\Domain\Security\IssuedTokens;
-use Kanso\Domain\Security\PasswordHasherInterface;
-use Kanso\Domain\Security\RefreshTokenStoreInterface;
-use Kanso\Domain\User\User;
-use Kanso\Domain\User\UserStoreInterface;
+use Kanso\Core\Internal\Application\Exception\AuthenticationFailed;
+use Kanso\Core\Internal\Application\Exception\TooManyAttempts;
+use Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface;
+use Kanso\Core\Internal\Domain\Security\IssuedTokens;
+use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
+use Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface;
+use Kanso\Core\Internal\Domain\User\User;
+use Kanso\Core\Internal\Domain\User\UserStoreInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
 /**

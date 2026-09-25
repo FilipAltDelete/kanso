@@ -1,0 +1,46 @@
+{
+    "name": "acme/kanso",
+    "description": "Acme's Kanso installation: the core, plus Acme's own bundle.",
+    "type": "project",
+    "license": "proprietary",
+    "repositories": {
+        "kanso-core": {
+            "type": "path",
+            "url": "../backend",
+            "options": {
+                "symlink": true
+            }
+        },
+        "kanso-contracts": {
+            "type": "path",
+            "url": "../backend/contracts",
+            "options": {
+                "symlink": true
+            }
+        }
+    },
+    "require": {
+        "php": ">=8.4",
+        "kanso/core": "^0.1"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^11.5",
+        "symfony/browser-kit": "^7.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Acme\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Acme\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
