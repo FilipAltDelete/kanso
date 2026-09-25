@@ -39,6 +39,9 @@ final class OrderStateMachineTest extends TestCase
                 if (OrderStatus::OnHold === $from && Transition::Release === $transition) {
                     continue;
                 }
+                if (OrderStatus::Shipped === $from && Transition::Reopen === $transition) {
+                    continue;
+                }
                 $to = self::ALLOWED[$from->value][$transition->value] ?? null;
 
                 yield \sprintf('%s --%s-->', $from->value, $transition->value) => [$from, $transition, null === $to ? null : OrderStatus::from($to)];
@@ -70,6 +73,27 @@ final class OrderStateMachineTest extends TestCase
     public function testReleaseReturnsToWhereTheOrderWasHeldFrom(OrderStatus $heldFrom): void
     {
         self::assertSame($heldFrom, OrderStateMachine::target(OrderStatus::OnHold, Transition::Release, $heldFrom));
+    }
+
+    #[DataProvider('shippable')]
+    public function testReopenReturnsToWhereTheOrderShippedFrom(OrderStatus $shippedFrom): void
+    {
+        self::assertSame($shippedFrom, OrderStateMachine::target(OrderStatus::Shipped, Transition::Reopen, null, $shippedFrom));
+    }
+
+    /** @return iterable<string, array{OrderStatus}> */
+    public static function shippable(): iterable
+    {
+        foreach (OrderStateMachine::SHIPPABLE as $status) {
+            yield $status->value => [$status];
+        }
+    }
+
+    public function testReopenNeedsAPlaceToReturnTo(): void
+    {
+        self::assertNull(OrderStateMachine::target(OrderStatus::Shipped, Transition::Reopen, null, null));
+        self::assertNull(OrderStateMachine::target(OrderStatus::Shipped, Transition::Reopen, null, OrderStatus::Pending), 'Nothing ships from pending.');
+        self::assertNull(OrderStateMachine::target(OrderStatus::Delivered, Transition::Reopen, null, OrderStatus::Packed), 'A delivered order is a return.');
     }
 
     public function testReleaseNeedsAPlaceToReturnTo(): void

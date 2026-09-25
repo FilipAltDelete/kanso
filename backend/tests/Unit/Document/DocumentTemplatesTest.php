@@ -15,6 +15,8 @@ use Kanso\Core\Internal\Domain\Order\Channel;
 use Kanso\Core\Internal\Domain\Order\NewOrderLine;
 use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderCustomer;
+use Kanso\Core\Internal\Domain\Order\OrderLine;
+use Kanso\Core\Internal\Domain\Order\Transition;
 use Kanso\Core\Internal\Infrastructure\Document\DompdfRenderer;
 use Kanso\Core\Internal\Infrastructure\Document\TwigTemplateRenderer;
 use PHPUnit\Framework\TestCase;
@@ -50,6 +52,25 @@ final class DocumentTemplatesTest extends TestCase
         $html = $this->render(DocumentType::PackingSlip, 'en', $this->order(['line1' => 'Box 7', 'postalCode' => '0150', 'city' => 'Oslo', 'countryCode' => 'NO']));
         self::assertStringContainsString('Bill to', $html);
         self::assertStringContainsString('Box 7<br>0150 Oslo<br>Norway<br>', $html);
+    }
+
+    public function testAPackingSlipForOneShipmentListsWhatIsInThatParcel(): void
+    {
+        $order = $this->order();
+        $order->apply(Transition::Confirm, new Actor('u1', 'Olle'), new \DateTimeImmutable('2026-09-25 13:00:00'));
+        array_map(static fn (OrderLine $line) => $line->markReserved(), $order->lines());
+        [$tee, $socks] = $order->lines();
+        $order->ship([['line' => $socks, 'quantity' => 2]], null, null, new \DateTimeImmutable('2026-09-25 14:00:00'), new Actor('u1', 'Olle'), new \DateTimeImmutable('2026-09-25 14:00:00'));
+        $second = $order->ship([['line' => $tee, 'quantity' => 1]], 'PostNord', '00370712345', new \DateTimeImmutable('2026-09-26 09:00:00'), new Actor('u1', 'Olle'), new \DateTimeImmutable('2026-09-26 09:00:00'));
+
+        $html = new TwigTemplateRenderer(self::TEMPLATES)->render(DocumentType::PackingSlip, OrderDocumentData::build($order, 'sv', new \DateTimeImmutable('2026-09-26 10:00:00'), $second));
+
+        self::assertStringContainsString('<dt>Paket</dt>', $html);
+        self::assertStringContainsString('<strong>2</strong>', $html, 'the second parcel');
+        self::assertStringContainsString('PostNord 00370712345', $html);
+        self::assertStringContainsString('<td class="sku">TSHIRT-M</td>', $html);
+        self::assertStringNotContainsString('<td class="sku">SOCKS</td>', $html, 'the socks went in the first parcel');
+        self::assertMatchesRegularExpression('#<td class="num">1</td>#', $html, 'one unit of three');
     }
 
     public function testWhatCustomersTypeIsEscaped(): void

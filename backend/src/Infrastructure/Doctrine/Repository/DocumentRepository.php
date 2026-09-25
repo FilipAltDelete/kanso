@@ -22,10 +22,9 @@ final class DocumentRepository implements DocumentStoreInterface
         return Uuid::isValid($id) ? $this->em->find(Document::class, Uuid::fromString($id)) : null;
     }
 
-    public function findReusable(DocumentType $type, Uuid $orderId, int $orderVersion, string $locale, \DateTimeImmutable $pendingSince): ?Document
+    public function findReusable(DocumentType $type, Uuid $orderId, int $orderVersion, string $locale, \DateTimeImmutable $pendingSince, ?Uuid $shipmentId = null): ?Document
     {
-        /** @var Document|null $document */
-        $document = $this->em->createQueryBuilder()
+        $query = $this->em->createQueryBuilder()
             ->select('d')
             ->from(Document::class, 'd')
             ->where('d.orderId = :order AND d.type = :type AND d.orderVersion = :version AND d.locale = :locale')
@@ -39,9 +38,16 @@ final class DocumentRepository implements DocumentStoreInterface
             ->setParameter('since', $pendingSince)
             ->orderBy('d.createdAt', 'DESC')
             ->addOrderBy('d.id', 'DESC')
-            ->setMaxResults(1)
-            ->getQuery()
-            ->getOneOrNullResult();
+            ->setMaxResults(1);
+        // A whole-order packing slip and each shipment's are different documents.
+        if (null === $shipmentId) {
+            $query->andWhere('d.shipmentId IS NULL');
+        } else {
+            $query->andWhere('d.shipmentId = :shipment')->setParameter('shipment', $shipmentId, 'uuid');
+        }
+
+        /** @var Document|null $document */
+        $document = $query->getQuery()->getOneOrNullResult();
 
         return $document;
     }

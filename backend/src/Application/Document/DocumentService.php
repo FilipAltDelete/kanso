@@ -13,7 +13,9 @@ use Kanso\Core\Internal\Domain\Document\DocumentStoreInterface;
 use Kanso\Core\Internal\Domain\Document\DocumentType;
 use Kanso\Core\Internal\Domain\Document\PdfRendererInterface;
 use Kanso\Core\Internal\Domain\Document\TemplateRendererInterface;
+use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
+use Kanso\Core\Internal\Domain\Order\Shipment;
 use Kanso\Core\Internal\Domain\Storage\ObjectStorageInterface;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Exception\UnrecoverableMessageHandlingException;
@@ -48,7 +50,7 @@ final class DocumentService
      * Queues a document for the order as it is now, or hands back the one
      * already made (or being made) for this version of the order.
      */
-    public function request(string $orderId, mixed $type, mixed $locale, Actor $actor): Document
+    public function request(string $orderId, mixed $type, mixed $locale, Actor $actor, mixed $shipmentId = null): Document
     {
         $violations = [];
         $documentType = \is_string($type) ? DocumentType::tryFrom($type) : null;
@@ -59,6 +61,9 @@ final class DocumentService
         if (!\in_array($locale, DocumentLabels::locales(), true)) {
             $violations[] = ['path' => 'locale', 'message' => 'The locale is "sv" or "en".', 'code' => 'invalid_choice'];
         }
+        if (null !== $shipmentId && DocumentType::PackingSlip !== $documentType) {
+            $violations[] = ['path' => 'shipmentId', 'message' => 'Only a packing slip can be for one shipment.', 'code' => 'invalid_choice'];
+        }
         if ([] !== $violations) {
             throw new ValidationFailed($violations);
         }
@@ -66,13 +71,32 @@ final class DocumentService
 
         $order = $this->orders->findById($orderId) ?? throw new NotFound(\sprintf('No order "%s".', $orderId));
 
+        $shipment = null;
+        if (null !== $shipmentId) {
+            $shipment = $this->shipment($order, $shipmentId)
+                ?? throw new ValidationFailed([['path' => 'shipmentId', 'message' => \sprintf('Order %s has no shipment "%s".', $order->number(), \is_string($shipmentId) ? $shipmentId : '?'), 'code' => 'unknown_shipment']]);
+            if ($shipment->isVoided()) {
+                throw new ValidationFailed([['path' => 'shipmentId', 'message' => 'That shipment was voided; nothing left in it.', 'code' => 'voided_shipment']]);
+            }
+        }
+
         $now = $this->clock->now();
-        $existing = $this->documents->findReusable($documentType, $order->id(), $order->version(), $locale, $now->modify(\sprintf('-%d seconds', self::PENDING_REUSE_SECONDS)));
+        $existing = $this->documents->findReusable($documentType, $order->id(), $order->version(), $locale, $now->modify(\sprintf('-%d seconds', self::PENDING_REUSE_SECONDS)), $shipment?->id());
         if (null !== $existing) {
             return $existing;
         }
 
-        $document = new Document($documentType, $order->id(), $order->number(), $order->version(), $locale, $actor, $now);
+        $document = new Document(
+            $documentType,
+            $order->id(),
+            $order->number(),
+            $order->version(),
+            $locale,
+            $actor,
+            $now,
+            $shipment?->id(),
+            null === $shipment ? null : OrderDocumentData::shipmentNumber($order, $shipment),
+        );
         $this->documents->save($document);
         // After the row is committed, so a worker never looks for a document that is not there yet.
         $this->bus->dispatch(new GenerateDocument((string) $document->id()));
@@ -120,7 +144,15 @@ final class DocumentService
         $document->start();
         $this->documents->save($document);
 
-        $html = $this->templates->render($document->type(), OrderDocumentData::build($order, $document->locale(), $this->clock->now()));
+        $shipmentId = $document->shipmentId();
+        $shipment = null === $shipmentId ? null : $this->shipment($order, (string) $shipmentId);
+        if (null !== $shipmentId && null === $shipment) {
+            $this->fail($document, 'The shipment no longer exists.');
+
+            throw new UnrecoverableMessageHandlingException(\sprintf('Shipment "%s" of document "%s" is gone.', $shipmentId, $id));
+        }
+
+        $html = $this->templates->render($document->type(), OrderDocumentData::build($order, $document->locale(), $this->clock->now(), $shipment));
         $pdf = $this->pdf->render($html);
 
         $key = $document->intendedStorageKey();
@@ -128,6 +160,17 @@ final class DocumentService
 
         $document->complete($key, \strlen($pdf), $this->clock->now());
         $this->documents->save($document);
+    }
+
+    private function shipment(Order $order, mixed $id): ?Shipment
+    {
+        foreach ($order->shipments() as $shipment) {
+            if (\is_string($id) && (string) $shipment->id() === $id) {
+                return $shipment;
+            }
+        }
+
+        return null;
     }
 
     /** Called when the worker gives up on a document for good. */

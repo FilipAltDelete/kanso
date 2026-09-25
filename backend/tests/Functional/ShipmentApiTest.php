@@ -169,6 +169,97 @@ final class ShipmentApiTest extends WebTestCase
         self::assertSame([9, 2, 7], $this->stock($this->tee), 'The two still reserved stay reserved.');
     }
 
+    public function testVoidingAShipmentPutsItsUnitsBackOnHandAndReserved(): void
+    {
+        $order = $this->ship($this->confirmed([[$this->tee, 5]]), [[0, 2]], carrier: 'DHL', tracking: 'X');
+        $mistake = $order['shipments'][0]['id'];
+        self::assertSame([8, 3, 5], $this->stock($this->tee));
+
+        $voided = $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/void', $order['id'], $mistake), ['version' => $order['version'], 'reason' => 'Recorded twice']);
+
+        self::assertSame(200, $this->responseStatus());
+        self::assertSame([10, 5, 5], $this->stock($this->tee), 'Back on hand and reserved; available never moved.');
+        self::assertSame([5, 0], [$voided['lines'][0]['reservedQuantity'], $voided['lines'][0]['shippedQuantity']]);
+        $shipment = $voided['shipments'][0];
+        self::assertNotNull($shipment['voidedAt']);
+        self::assertSame(['Recorded twice', false], [$shipment['voidReason'], $shipment['voidable']]);
+        self::assertContains('cancel', $voided['availableTransitions'], 'Nothing has shipped any more.');
+        $movement = $this->api('GET', '/api/inventory-movements?product='.$this->tee['id'])['member'][0];
+        self::assertSame(['shipment_voided', 2, 3, 5], [$movement['type'], $movement['onHandChange'], $movement['reservedBefore'], $movement['reservedAfter']]);
+    }
+
+    public function testVoidingTheLastShipmentReopensTheOrder(): void
+    {
+        $order = $this->confirmed([[$this->tee, 2]]);
+        $order = $this->api('POST', '/api/orders/'.$order['id'].'/transitions', ['transition' => 'allocate', 'version' => $order['version']]);
+        $shipped = $this->ship($order, [[0, 2]]);
+        self::assertSame('shipped', $shipped['status']);
+
+        $reopened = $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/void', $shipped['id'], $shipped['shipments'][0]['id']), ['version' => $shipped['version']]);
+
+        self::assertSame('allocated', $reopened['status']);
+        self::assertTrue($reopened['canShip']);
+        self::assertSame([10, 2, 8], $this->stock($this->tee));
+        self::assertSame(['shipment_voided', 'transition'], array_column(\array_slice($reopened['events'], -2), 'type'));
+        self::assertSame('reopen', $reopened['events'][array_key_last($reopened['events'])]['transition']);
+    }
+
+    public function testADeliveredOrdersShipmentCannotBeVoided(): void
+    {
+        $shipped = $this->ship($this->confirmed([[$this->tee, 1]]), [[0, 1]]);
+        $delivered = $this->api('POST', '/api/orders/'.$shipped['id'].'/transitions', ['transition' => 'deliver', 'version' => $shipped['version']]);
+        $before = $this->snapshot($delivered);
+
+        $problem = $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/void', $delivered['id'], $delivered['shipments'][0]['id']), ['version' => $delivered['version']]);
+
+        self::assertSame(409, $this->responseStatus());
+        self::assertSame('not_voidable', $problem['violations'][0]['code']);
+        self::assertSame($before, $this->snapshot($delivered));
+    }
+
+    public function testAVoidWithAStaleVersionChangesNothing(): void
+    {
+        $order = $this->ship($this->confirmed([[$this->tee, 5]]), [[0, 2]]);
+        $before = $this->snapshot($order);
+
+        $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/void', $order['id'], $order['shipments'][0]['id']), ['version' => $order['version'] - 1]);
+
+        self::assertSame(409, $this->responseStatus());
+        self::assertSame($before, $this->snapshot($order));
+    }
+
+    public function testATrackingNumberCanBeCorrectedWithoutMovingStock(): void
+    {
+        $order = $this->ship($this->confirmed([[$this->tee, 5]]), [[0, 2]], carrier: 'PostNord', tracking: '0037O');
+
+        $corrected = $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/tracking', $order['id'], $order['shipments'][0]['id']), ['version' => $order['version'], 'trackingNumber' => '00370']);
+
+        self::assertSame(200, $this->responseStatus());
+        self::assertSame(['PostNord', '00370'], [$corrected['shipments'][0]['carrier'], $corrected['shipments'][0]['trackingNumber']], 'The carrier was not sent, so it was kept.');
+        self::assertSame([8, 3, 5], $this->stock($this->tee));
+        $event = $corrected['events'][array_key_last($corrected['events'])];
+        self::assertSame(['shipment_corrected', '0037O', '00370'], [$event['type'], $event['before']['trackingNumber'], $event['after']['trackingNumber']]);
+
+        $cleared = $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/tracking', $order['id'], $order['shipments'][0]['id']), ['version' => $corrected['version'], 'carrier' => null]);
+        self::assertNull($cleared['shipments'][0]['carrier'] ?? null);
+    }
+
+    public function testWhenAShipmentLeftIsChecked(): void
+    {
+        $order = $this->confirmed([[$this->tee, 2]]);
+
+        $problem = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 1]], 'shippedAt' => '2099-01-01T00:00:00Z']);
+        self::assertSame(422, $this->responseStatus());
+        self::assertSame(['shippedAt' => 'in_future'], array_column($problem['violations'], 'code', 'path'));
+
+        $problem = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 1]], 'shippedAt' => '2001-01-01T00:00:00Z']);
+        self::assertSame(['shippedAt' => 'before_placed'], array_column($problem['violations'], 'code', 'path'));
+
+        $shipped = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 1]], 'shippedAt' => new \DateTimeImmutable()->format(\DATE_ATOM)]);
+        self::assertSame(201, $this->responseStatus());
+        self::assertNotEmpty($shipped['shipments'][0]['shippedAt']);
+    }
+
     public function testAViewerCannotShip(): void
     {
         $order = $this->confirmed([[$this->tee, 1]]);

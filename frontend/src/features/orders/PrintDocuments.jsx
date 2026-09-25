@@ -28,18 +28,20 @@ export function PrintDocuments({ order }) {
   );
 }
 
-function PrintDocument({ order, type }) {
+/** One document's button, link and status; `shipmentId` makes it the packing slip of that parcel. */
+export function PrintDocument({ order, type, shipmentId = null, label: customLabel = null }) {
   const { t, locale } = useI18n();
   const request = useRequestDocument(order.id);
   const [documentId, setDocumentId] = useState(null);
   const job = useDocument(documentId);
   const data = job.data;
 
-  const ask = () => request.mutate({ type, locale }, { onSuccess: (created) => setDocumentId(created.id) });
+  const ask = () => request.mutate({ type, locale, shipmentId }, { onSuccess: (created) => setDocumentId(created.id) });
   const busy = request.isPending || (documentId !== null && (!data || data.status === 'queued' || data.status === 'running'));
-  const label = t(`documents.type.${type}`);
-  // The first document (the pick list) is what the "p" shortcut prints.
-  const shortcut = type === DOCUMENT_TYPES[0] ? 'print' : undefined;
+  const label = customLabel ?? t(`documents.type.${type}`);
+  const statusId = `print-${type}-${shipmentId ?? 'order'}-status`;
+  // The first document of the whole order (the pick list) is what the "p" shortcut prints.
+  const shortcut = type === DOCUMENT_TYPES[0] && shipmentId === null ? 'print' : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -55,12 +57,12 @@ function PrintDocument({ order, type }) {
           {t(`documents.open.${type}`)}
         </a>
       ) : (
-        <Button size="sm" variant="outline" data-shortcut={shortcut} onClick={ask} disabled={busy} aria-describedby={`print-${type}-status`}>
+        <Button size="sm" variant="outline" data-shortcut={shortcut} onClick={ask} disabled={busy} aria-describedby={statusId}>
           {data?.status === 'failed' ? <RotateCw className="size-4" aria-hidden="true" /> : <Printer className="size-4" aria-hidden="true" />}
           {data?.status === 'failed' ? t(`documents.retry.${type}`) : label}
         </Button>
       )}
-      <span id={`print-${type}-status`} role="status" className="text-xs text-slate-600">
+      <span id={statusId} role="status" className="text-xs text-slate-600">
         {busy ? t('documents.preparing') : data?.status === 'failed' ? t('documents.failed') : ''}
       </span>
       {request.error ? <ErrorNotice error={request.error} /> : null}

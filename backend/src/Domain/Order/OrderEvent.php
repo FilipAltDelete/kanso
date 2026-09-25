@@ -21,6 +21,8 @@ class OrderEvent
     public const string CREATED = 'created';
     public const string TRANSITION = 'transition';
     public const string SHIPMENT = 'shipment';
+    public const string SHIPMENT_CORRECTED = 'shipment_corrected';
+    public const string SHIPMENT_VOIDED = 'shipment_voided';
     public const string NOTE = 'note';
     public const string TAGS_CHANGED = 'tags_changed';
     public const string PAYMENT_STATUS_CHANGED = 'payment_status_changed';

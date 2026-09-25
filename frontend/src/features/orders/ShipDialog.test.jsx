@@ -28,6 +28,7 @@ function confirmed(overrides = {}) {
         trackingNumber: '00370712345',
         shippedAt: '2026-09-26T09:00:00+00:00',
         actor: { id: 'u1', name: 'Olle' },
+        voidable: true,
         lines: [{ lineId: 'l1', position: 1, sku: 'TSHIRT-M', name: 'T-shirt, M', quantity: 1 }],
       },
     ],
@@ -80,12 +81,25 @@ describe('shipping an order', () => {
     fireEvent.change(within(dialog).getByLabelText('Tracking number'), { target: { value: ' JD0123 ' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ship 1 units' }));
 
-    await waitFor(() =>
-      expect(api).toHaveBeenCalledWith('/api/orders/o1/shipments', {
-        method: 'POST',
-        body: { version: 3, lines: [{ lineId: 'l1', quantity: 1 }], carrier: 'DHL', trackingNumber: 'JD0123' },
-      }),
-    );
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders/o1/shipments', expect.objectContaining({ method: 'POST' })));
+    const [, { body }] = api.mock.calls.find(([path]) => path === '/api/orders/o1/shipments');
+    expect(body).toMatchObject({ version: 3, lines: [{ lineId: 'l1', quantity: 1 }], carrier: 'DHL', trackingNumber: 'JD0123' });
+    // When it left: now, unless changed, sent as an instant.
+    expect(Math.abs(new Date(body.shippedAt).getTime() - Date.now())).toBeLessThan(2 * 60 * 1000);
+  });
+
+  it('sends the time the parcel left when it was earlier', async () => {
+    api.mockResolvedValueOnce(confirmed()).mockResolvedValueOnce(confirmed({ version: 4 }));
+    renderAt('/orders/o1');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ship' }));
+    const dialog = screen.getByRole('dialog', { name: 'Ship order 10001' });
+    fireEvent.change(within(dialog).getByLabelText('Shipped at'), { target: { value: '2026-09-26T07:30' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ship 4 units' }));
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders/o1/shipments', expect.objectContaining({ method: 'POST' })));
+    const [, { body }] = api.mock.calls.find(([path]) => path === '/api/orders/o1/shipments');
+    expect(body.shippedAt).toBe(new Date('2026-09-26T07:30').toISOString());
   });
 
   it('refuses more than is left, and a shipment of nothing, before sending', async () => {
@@ -133,5 +147,66 @@ describe('shipping an order', () => {
     renderAt('/orders/o1');
     await screen.findByRole('table', { name: 'Lines' });
     expect(screen.queryByRole('button', { name: 'Ship' })).toBeNull();
+  });
+
+  it('corrects a tracking number with the order version', async () => {
+    api.mockResolvedValueOnce(confirmed()).mockResolvedValueOnce(confirmed({ version: 4 }));
+    renderAt('/orders/o1');
+
+    const shipments = await screen.findByRole('region', { name: 'Shipments' });
+    fireEvent.click(within(shipments).getByRole('button', { name: 'Correct tracking' }));
+    fireEvent.change(within(shipments).getByLabelText('Tracking number'), { target: { value: '00370712399' } });
+    fireEvent.click(within(shipments).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith('/api/orders/o1/shipments/s1/tracking', {
+        method: 'POST',
+        body: { version: 3, carrier: 'PostNord', trackingNumber: '00370712399' },
+      }),
+    );
+  });
+
+  it('voids a shipment after asking, with the reason', async () => {
+    api.mockResolvedValueOnce(confirmed()).mockResolvedValueOnce(confirmed({ version: 4 }));
+    renderAt('/orders/o1');
+
+    const shipments = await screen.findByRole('region', { name: 'Shipments' });
+    fireEvent.click(within(shipments).getByRole('button', { name: 'Void shipment' }));
+    const confirm = within(shipments).getByRole('group', { name: 'Void shipment' });
+    expect(confirm.textContent).toContain('not for a return');
+    expect(api).toHaveBeenCalledTimes(1);
+    fireEvent.change(within(confirm).getByLabelText('Reason (optional)'), { target: { value: 'Recorded twice' } });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Void shipment' }));
+
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith('/api/orders/o1/shipments/s1/void', { method: 'POST', body: { version: 3, reason: 'Recorded twice' } }),
+    );
+  });
+
+  it('shows a voided shipment as void, with nothing more to do to it', async () => {
+    const [shipment] = confirmed().shipments;
+    api.mockResolvedValue(confirmed({ shipments: [{ ...shipment, voidedAt: '2026-09-26T10:00:00+00:00', voidedBy: { id: 'u1', name: 'Olle' }, voidReason: 'Recorded twice', voidable: false }] }));
+    renderAt('/orders/o1');
+
+    const shipments = await screen.findByRole('region', { name: 'Shipments' });
+    expect(within(shipments).getByText('Voided')).toBeTruthy();
+    expect(within(shipments).getByText(/Recorded twice/)).toBeTruthy();
+    expect(within(shipments).queryByRole('button', { name: 'Void shipment' })).toBeNull();
+    expect(within(shipments).queryByRole('button', { name: 'Packing slip' })).toBeNull();
+  });
+
+  it('offers each live shipment its own packing slip', async () => {
+    api.mockResolvedValueOnce(confirmed()).mockResolvedValueOnce({
+      id: 'd1', type: 'packing_slip', orderId: 'o1', orderNumber: '10001', orderVersion: 3, shipmentId: 's1', locale: 'en',
+      status: 'queued', filename: 'packing-slip-10001-1.pdf', downloadUrl: null, byteSize: null, createdAt: '2026-09-26T10:00:00+00:00', completedAt: null,
+    });
+    renderAt('/orders/o1');
+
+    const shipments = await screen.findByRole('region', { name: 'Shipments' });
+    fireEvent.click(within(shipments).getByRole('button', { name: 'Packing slip' }));
+
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith('/api/orders/o1/documents', { method: 'POST', body: { type: 'packing_slip', locale: 'en', shipmentId: 's1' } }),
+    );
   });
 });

@@ -115,6 +115,24 @@ final class OrderStock
         }
     }
 
+    /**
+     * A voided shipment's units are back on hand and reserved for the order
+     * again, at the location they left from. Order::voidShipment() has already
+     * put them back on the lines.
+     */
+    public function unship(Order $order, Shipment $shipment, Actor $actor, \DateTimeImmutable $now): void
+    {
+        $lines = $shipment->lines();
+        $levels = $this->lock(array_map(static fn (ShipmentLine $line): Product => self::product($line->orderLine()), $lines), $shipment->location());
+
+        foreach ($lines as $line) {
+            $level = $levels[self::product($line->orderLine())->id()->toRfc4122()]
+                ?? throw new \LogicException(\sprintf('Order %s voids %s at %s, but there is no inventory level.', $order->number(), $line->orderLine()->skuCode(), $shipment->location()->code()));
+            $change = $level->unconsume($line->quantity(), $now);
+            $this->record(MovementType::ShipmentVoided, $level, $change, $order, $actor, $now);
+        }
+    }
+
     private function settle(Order $order, MovementType $type, Actor $actor, \DateTimeImmutable $now): void
     {
         // Orders confirmed before reservations existed hold nothing.

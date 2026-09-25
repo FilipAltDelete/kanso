@@ -13,6 +13,8 @@ final class ShipmentRefused extends \DomainException
     public const string EXCEEDS_REMAINING = 'exceeds_remaining';
     /** A line has no stock reserved to ship: the order was confirmed before reservations existed. */
     public const string NOT_RESERVED = 'not_reserved';
+    /** Already voided, or the order is delivered or cancelled: a return (Phase 3), not a void. */
+    public const string NOT_VOIDABLE = 'not_voidable';
     /** A shipment of nothing. */
     public const string EMPTY = 'empty_shipment';
 

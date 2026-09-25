@@ -28,6 +28,9 @@ export function ShipDialog({ order, onClose }) {
   const [quantities, setQuantities] = useState(() => Object.fromEntries(open.map((line) => [line.id, String(line.quantity - line.shippedQuantity)])));
   const [carrier, setCarrier] = useState('');
   const [tracking, setTracking] = useState('');
+  // When the parcel left, in the operator's local time; now, unless it was handed over earlier.
+  const [shippedAt, setShippedAt] = useState(() => localDateTime(new Date()));
+  const shippedAtId = useId();
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
@@ -60,6 +63,7 @@ export function ShipDialog({ order, onClose }) {
         lines: rows.filter((row) => row.value > 0).map((row) => ({ lineId: row.line.id, quantity: row.value })),
         ...(carrier.trim() ? { carrier: carrier.trim() } : {}),
         ...(tracking.trim() ? { trackingNumber: tracking.trim() } : {}),
+        ...(shippedAt ? { shippedAt: new Date(shippedAt).toISOString() } : {}),
       },
       { onSuccess: () => dialogRef.current?.close() },
     );
@@ -138,7 +142,13 @@ export function ShipDialog({ order, onClose }) {
           </p>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label htmlFor={shippedAtId} className="mb-1 block text-sm font-medium">
+              {t('ship.shippedAt')}
+            </label>
+            <Input id={shippedAtId} type="datetime-local" value={shippedAt} max={localDateTime(new Date())} onChange={(event) => setShippedAt(event.target.value)} />
+          </div>
           <div>
             <label htmlFor={carrierId} className="mb-1 block text-sm font-medium">
               {t('ship.carrier')}
@@ -169,4 +179,11 @@ export function ShipDialog({ order, onClose }) {
       </form>
     </dialog>
   );
+}
+
+/** A Date as the value of a datetime-local input, in local time: 2026-09-28T14:05. */
+function localDateTime(date) {
+  const pad = (value) => String(value).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

@@ -48,6 +48,9 @@ final class DocumentResource
 
     public string $orderNumber = '';
 
+    /** Set when the document is a packing slip for one shipment. */
+    public ?string $shipmentId = null;
+
     /** The order version the document shows. */
     public int $orderVersion = 0;
 

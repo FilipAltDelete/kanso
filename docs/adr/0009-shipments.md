@@ -1,6 +1,6 @@
 # ADR-0009: Orders ship through shipments; partial shipments; the last one ships the order
 
-- Status: accepted
+- Status: accepted (amended 2026-09-28: voiding, corrections, per-shipment packing slips, the shipped time)
 - Date: 2026-09-26
 
 ## Context
@@ -28,3 +28,15 @@ Until now `ship` was a transition that took all of an order's reserved stock off
 - Orders already shipped by the old transition were backfilled as fully shipped (`shipped_quantity = quantity`) by the migration; they have no shipment rows.
 - Delivery is still a transition (`deliver`), set by hand; tracking-based delivery is Phase 2 with the carrier integrations.
 - Partial cancel, returns (Phase 3) and back-orders build on `shipped_quantity`: what is not shipped is what can still be cancelled or re-routed.
+
+## Amendment (2026-09-28): after a shipment
+
+- **Correcting** a shipment's carrier and tracking number: `POST /api/orders/{id}/shipments/{shipmentId}/tracking` with `{version, carrier?, trackingNumber?}` (a field left out is kept, `null` clears it). It moves no stock and is allowed in any status. An order event (`shipment_corrected`) records before and after.
+- **Voiding** a shipment recorded by mistake: `POST /api/orders/{id}/shipments/{shipmentId}/void` with `{version, reason?}`. In one transaction:
+  - the lines' shipped quantities go down and their reservations up by the shipment's quantities, so the line invariant (reserved = quantity − shipped − cancelled while the order holds stock) holds;
+  - the stock levels, locked as for shipping, get the units back on hand *and* reserved, so available does not move — the goods are back on the shelf, still promised to this order;
+  - the shipment is kept and marked void (who, when, why) and no longer counts; an order event (`shipment_voided`) and inventory movements (`shipment_voided`) record it;
+  - an order that had become `shipped` is **reopened** where it shipped from. The order remembers that status (`shipped_from`, set whenever `ship` is applied, including by the last shipment or by a partial cancel that finishes a partly shipped order), and a new transition `reopen` (shipped → shipped_from) takes it back through the state machine. Like `ship`, `reopen` is never a transition a person asks for (409 `use_shipments`).
+  - Not for a delivered or cancelled order (409 `not_voidable`): goods that reached the customer come back as a return (Phase 3). A voided shipment is not voided or corrected again.
+- **Per-shipment packing slips:** `POST /api/orders/{id}/documents` takes an optional `shipmentId` (packing slips only). The slip lists what went in that parcel, numbered in the order (parcel 1, 2, …), with carrier, tracking number and date; the file is `packing-slip-<order>-<n>.pdf`. A voided shipment gets no slip.
+- **The shipped time:** the Ship dialog sends when the parcel left (default now). It may not be in the future (a few minutes' grace) or before the order was placed.

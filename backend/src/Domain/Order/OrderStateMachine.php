@@ -9,6 +9,7 @@ namespace Kanso\Core\Internal\Domain\Order;
  *
  *   pending → confirmed → allocated → picking → packed → shipped → delivered
  *   ship:    from any of confirmed … packed, applied by the last shipment
+ *   reopen:  shipped → where it shipped from, when a shipment is voided
  *   cancel:  any status before shipped (on_hold included) → cancelled
  *   hold:    any status before shipped → on_hold, remembering where it was
  *   release: on_hold → the status it was held from
@@ -57,13 +58,14 @@ final class OrderStateMachine
      * Where a transition takes an order, or null when it is not allowed from
      * there. `$heldFrom` is where an on-hold order returns to on release.
      */
-    public static function target(OrderStatus $from, Transition $transition, ?OrderStatus $heldFrom = null): ?OrderStatus
+    public static function target(OrderStatus $from, Transition $transition, ?OrderStatus $heldFrom = null, ?OrderStatus $shippedFrom = null): ?OrderStatus
     {
         return match ($transition) {
             Transition::Cancel => \in_array($from, self::HOLDABLE, true) || OrderStatus::OnHold === $from ? OrderStatus::Cancelled : null,
             Transition::Hold => \in_array($from, self::HOLDABLE, true) ? OrderStatus::OnHold : null,
             Transition::Release => OrderStatus::OnHold === $from && \in_array($heldFrom, self::HOLDABLE, true) ? $heldFrom : null,
             Transition::Ship => \in_array($from, self::SHIPPABLE, true) ? OrderStatus::Shipped : null,
+            Transition::Reopen => OrderStatus::Shipped === $from && \in_array($shippedFrom, self::SHIPPABLE, true) ? $shippedFrom : null,
             default => self::FORWARD[$transition->value][0] === $from ? self::FORWARD[$transition->value][1] : null,
         };
     }

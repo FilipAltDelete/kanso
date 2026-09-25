@@ -121,6 +121,21 @@ class InventoryLevel
         return $this->apply($this->onHand - $quantity, $this->reserved - $quantity, $now);
     }
 
+    /**
+     * A shipment that never left after all (voided): its units are back on
+     * hand, and still reserved for the order they were picked for, so
+     * available does not change.
+     */
+    public function unconsume(int $quantity, \DateTimeImmutable $now): StockChange
+    {
+        self::assertPositive($quantity);
+        if ($this->onHand + $quantity > self::MAX_QUANTITY) {
+            throw new StockRuleViolated(\sprintf('On hand cannot exceed %d.', self::MAX_QUANTITY), StockRuleViolated::TOO_LARGE);
+        }
+
+        return $this->apply($this->onHand + $quantity, $this->reserved + $quantity, $now);
+    }
+
     public function id(): Uuid
     {
         return $this->id;

@@ -21,6 +21,7 @@ final class DocumentPresenter
         $resource->type = $document->type()->value;
         $resource->orderId = (string) $document->orderId();
         $resource->orderNumber = $document->orderNumber();
+        $resource->shipmentId = null === $document->shipmentId() ? null : (string) $document->shipmentId();
         $resource->orderVersion = $document->orderVersion();
         $resource->locale = $document->locale();
         // Why it failed stays in the database and the logs: the message can

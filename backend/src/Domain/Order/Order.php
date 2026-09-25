@@ -60,6 +60,10 @@ class Order
     #[ORM\Column(name: 'held_from', length: 16, nullable: true, enumType: OrderStatus::class)]
     private ?OrderStatus $heldFrom = null;
 
+    /** Where a shipped order came from, so voiding a shipment can reopen it there. */
+    #[ORM\Column(name: 'shipped_from', length: 16, nullable: true, enumType: OrderStatus::class)]
+    private ?OrderStatus $shippedFrom = null;
+
     #[ORM\Column(name: 'payment_status', length: 24, enumType: PaymentStatus::class)]
     private PaymentStatus $paymentStatus = PaymentStatus::Unpaid;
 
@@ -185,7 +189,7 @@ class Order
     /** The one way to change an order's status. */
     public function apply(Transition $transition, Actor $actor, \DateTimeImmutable $now): OrderEvent
     {
-        $target = OrderStateMachine::target($this->status, $transition, $this->heldFrom);
+        $target = OrderStateMachine::target($this->status, $transition, $this->heldFrom, $this->shippedFrom);
         // Part of it has left the building: cancelling the rest is a partial
         // cancel, which is its own feature (ROADMAP Phase 1), not this.
         if (null === $target || (Transition::Cancel === $transition && $this->hasShipped())) {
@@ -196,6 +200,7 @@ class Order
         // this method changes the status and records it, nothing else.
         $before = $this->statusState();
         $this->heldFrom = OrderStatus::OnHold === $target ? $this->status : null;
+        $this->shippedFrom = OrderStatus::Shipped === $target ? $this->status : (Transition::Reopen === $transition ? null : $this->shippedFrom);
         $this->status = $target;
         $this->updatedAt = $now;
 
@@ -368,6 +373,90 @@ class Order
         return $shipment;
     }
 
+    /**
+     * Fixes a shipment's carrier and tracking number, typed wrong. Allowed
+     * whatever the order's status: it changes no stock and no quantity.
+     */
+    public function correctShipment(Shipment $shipment, ?string $carrier, ?string $trackingNumber, Actor $actor, \DateTimeImmutable $now): ?OrderEvent
+    {
+        $this->assertOwn($shipment);
+        if ($shipment->isVoided()) {
+            throw new ShipmentRefused('A voided shipment is not corrected.', ShipmentRefused::NOT_VOIDABLE);
+        }
+        $before = ['carrier' => $shipment->carrier(), 'trackingNumber' => $shipment->trackingNumber()];
+        $after = ['carrier' => $carrier, 'trackingNumber' => $trackingNumber];
+        if ($before === $after) {
+            return null;
+        }
+
+        $shipment->correct($carrier, $trackingNumber);
+        $this->updatedAt = $now;
+        $event = new OrderEvent($this, OrderEvent::SHIPMENT_CORRECTED, null, $actor, ['shipment' => (string) $shipment->id(), ...$before], ['shipment' => (string) $shipment->id(), ...$after], $now);
+        $this->events->add($event);
+
+        return $event;
+    }
+
+    /**
+     * Takes back a shipment recorded by mistake: its units are unshipped and
+     * reserved again (the stock is OrderStock's, in the same transaction), the
+     * shipment is marked void and kept, and an order that had shipped goes
+     * back to where it shipped from. A delivered order is a return, not this.
+     *
+     * @throws ShipmentRefused
+     */
+    public function voidShipment(Shipment $shipment, ?string $reason, Actor $actor, \DateTimeImmutable $now): void
+    {
+        $this->assertOwn($shipment);
+        if ($shipment->isVoided()) {
+            throw new ShipmentRefused('This shipment is already voided.', ShipmentRefused::NOT_VOIDABLE);
+        }
+        if (OrderStatus::Shipped !== $this->status && !\in_array($this->status, self::HOLDING_STOCK, true)) {
+            throw new ShipmentRefused(\sprintf('A shipment of an order that is %s cannot be voided; a delivered order comes back as a return.', $this->status->value), ShipmentRefused::NOT_VOIDABLE);
+        }
+
+        foreach ($shipment->lines() as $line) {
+            $line->orderLine()->markUnshipped($line->quantity());
+        }
+        $shipment->void($reason, $actor, $now);
+        $this->updatedAt = $now;
+        $this->events->add(new OrderEvent($this, OrderEvent::SHIPMENT_VOIDED, null, $actor, null, [
+            'shipment' => (string) $shipment->id(),
+            'reason' => $reason,
+            'lines' => array_map(static fn (ShipmentLine $line): array => ['position' => $line->orderLine()->position(), 'sku' => $line->orderLine()->skuCode(), 'quantity' => $line->quantity()], $shipment->lines()),
+        ], $now));
+
+        if (OrderStatus::Shipped === $this->status) {
+            // Orders shipped before `shipped_from` existed go back to packed.
+            $this->shippedFrom ??= OrderStatus::Packed;
+            $this->apply(Transition::Reopen, $actor, $now);
+        }
+    }
+
+    /** Whether a shipment can be voided now (it is not already, and the order is not delivered or cancelled). */
+    public function canVoid(Shipment $shipment): bool
+    {
+        return !$shipment->isVoided() && (OrderStatus::Shipped === $this->status || \in_array($this->status, self::HOLDING_STOCK, true));
+    }
+
+    public function shipmentById(string $id): ?Shipment
+    {
+        foreach ($this->shipments as $shipment) {
+            if ((string) $shipment->id() === $id) {
+                return $shipment;
+            }
+        }
+
+        return null;
+    }
+
+    private function assertOwn(Shipment $shipment): void
+    {
+        if (!$this->shipments->contains($shipment)) {
+            throw new \InvalidArgumentException(\sprintf('That shipment is not one of order %s\'s.', $this->number));
+        }
+    }
+
     /** Whether a shipment can be recorded now: the order holds stock, is not on hold, and has units left. */
     public function canShip(): bool
     {
@@ -377,7 +466,7 @@ class Order
     /** Whether any of the order has left in a shipment. */
     public function hasShipped(): bool
     {
-        return !$this->shipments->isEmpty();
+        return $this->shipments->exists(static fn (int $key, Shipment $shipment): bool => !$shipment->isVoided());
     }
 
     private function remainingUnits(): int
@@ -396,7 +485,7 @@ class Order
     {
         return array_values(array_filter(
             OrderStateMachine::available($this->status, $this->heldFrom),
-            fn (Transition $transition): bool => Transition::Ship !== $transition && !(Transition::Cancel === $transition && $this->hasShipped()),
+            fn (Transition $transition): bool => !\in_array($transition, [Transition::Ship, Transition::Reopen], true) && !(Transition::Cancel === $transition && $this->hasShipped()),
         ));
     }
 
