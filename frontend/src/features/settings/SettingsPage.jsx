@@ -5,6 +5,7 @@ import { useI18n } from '../../lib/i18n.jsx';
 import { useShortcutSettings } from '../../lib/ShortcutsProvider.jsx';
 import { saveTheme, savedTheme, THEMES } from '../../lib/theme.js';
 import { cn } from '../../lib/utils.js';
+import { ApiKeySettings } from './ApiKeySettings.jsx';
 
 /**
  * This person's settings. A theme applies and is remembered as soon as it is
@@ -88,6 +89,8 @@ export function SettingsPage() {
       </section>
 
       <ShortcutSettings />
+
+      <ApiKeySettings />
     </div>
   );
 }

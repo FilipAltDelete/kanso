@@ -6,6 +6,7 @@ namespace Kanso\Core\Internal\Application\Security;
 
 use Kanso\Core\Internal\Application\Exception\AuthenticationFailed;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Application\Order\OrderInput;
 use Kanso\Core\Internal\Domain\Security\ApiKey;
 use Kanso\Core\Internal\Domain\Security\ApiKeyStoreInterface;
 use Kanso\Core\Internal\Domain\User\Role;
@@ -18,6 +19,9 @@ use Psr\Clock\ClockInterface;
  */
 final class ApiKeyService
 {
+    /** The `api_key.name` column's length. */
+    private const int NAME_MAX = 128;
+
     public function __construct(
         private readonly ApiKeyStoreInterface $keys,
         private readonly UserStoreInterface $users,
@@ -38,9 +42,13 @@ final class ApiKeyService
 
         if ('' === $name) {
             $violations[] = ['path' => 'name', 'message' => 'An API key needs a name, so it can be recognised later.', 'code' => 'required'];
+        } elseif (mb_strlen($name) > self::NAME_MAX) {
+            $violations[] = ['path' => 'name', 'message' => \sprintf('This value is longer than %d characters.', self::NAME_MAX), 'code' => 'too_long'];
         }
 
-        if (Role::ADMIN === $role) {
+        if ('' === $role) {
+            $violations[] = ['path' => 'role', 'message' => 'An API key needs a role.', 'code' => 'required'];
+        } elseif (Role::ADMIN === $role) {
             // An integration never needs to manage users or keys; a leaked
             // admin key would hand out the whole installation.
             $violations[] = ['path' => 'role', 'message' => 'An API key cannot have the admin role.', 'code' => 'forbidden_role'];
@@ -69,6 +77,32 @@ final class ApiKeyService
         $this->keys->save($key);
 
         return ['key' => $key, 'plainKey' => $plainKey];
+    }
+
+    /**
+     * create() from a request body taken as sent, so a value of the wrong
+     * type is a violation at its path rather than a guess.
+     *
+     * @param array<string, mixed> $input     `name`, `role` and optionally `expiresAt` (ISO 8601)
+     * @param string               $createdBy the signed-in user's id
+     *
+     * @return array{key: ApiKey, plainKey: string}
+     */
+    public function createFromRequest(array $input, string $createdBy): array
+    {
+        $check = new OrderInput();
+        $name = $input['name'] ?? null;
+        $role = $input['role'] ?? null;
+        if (null !== $name && !\is_string($name)) {
+            $check->violate('name', 'This value must be text.', 'type');
+        }
+        if (null !== $role && !\is_string($role)) {
+            $check->violate('role', 'This value must be text.', 'type');
+        }
+        $expiresAt = $check->instant($input['expiresAt'] ?? null, 'expiresAt');
+        $check->throwIfInvalid();
+
+        return $this->create(\is_string($name) ? $name : '', \is_string($role) ? $role : '', $expiresAt, $createdBy);
     }
 
     public function revoke(string $id): ApiKey

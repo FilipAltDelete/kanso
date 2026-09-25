@@ -26,7 +26,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Stack, deployment model and auth as Pimsen (`docs/adr/0001`, `0002`)
 - [x] Docker images (api, worker, web), Compose stack, Makefile, hand-written migrations, dev admin seeding
 - [x] JWT login with rotating refresh cookie, login rate limiting, roles (Admin, Operator, Viewer)
-- [x] API keys for integrations: hashed, one role, optional expiry, per-key rate limit (console commands; REST management endpoints not yet)
+- [x] API keys for integrations: hashed, one role, optional expiry, per-key rate limit; admins list, create (key shown once) and revoke them under Settings or through `/api/api-keys`, or with the console commands
 - [x] UI shell: login, navigation, empty dashboard, Swedish/English
 - [x] CI: lint, static analysis, tests, image builds (GitHub Actions)
 - [x] Domain model draft (`docs/domain-model.md`)
