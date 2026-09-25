@@ -28,12 +28,16 @@ final class OrderDocumentData
 
         // For one shipment: what is in that parcel, not what was ordered.
         $entries = null === $shipment
-            ? array_map(static fn ($line): array => [$line, $line->quantity()], $order->lines())
+            // Cancelled units are neither picked nor packed (ADR-0011).
+            ? array_map(static fn ($line): array => [$line, $line->quantity() - $line->cancelledQuantity()], $order->lines())
             : array_map(static fn ($line): array => [$line->orderLine(), $line->quantity()], $shipment->lines());
 
         $lines = [];
         $units = 0;
         foreach ($entries as [$line, $quantity]) {
+            if (0 === $quantity) {
+                continue;
+            }
             $lines[] = [
                 'position' => $line->position(),
                 'sku' => $line->skuCode(),

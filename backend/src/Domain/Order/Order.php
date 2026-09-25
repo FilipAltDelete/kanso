@@ -23,6 +23,11 @@ use Symfony\Component\Uid\Uuid;
  * event but leave `version` alone, so tagging a hundred orders from the list
  * never makes an operator's open order page stale. The payment status is
  * part of the order and moves `version` like any other change.
+ *
+ * Before fulfillment an order can be edited (lines, customer, addresses), and
+ * until it ships some of its units can be cancelled (ADR-0011). Each writes
+ * one event with what changed; the stock follows in OrderStock, in the same
+ * transaction.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'sales_order')]
@@ -33,6 +38,9 @@ class Order
 
     /** The statuses in which the order's stock is reserved, and in which it can ship. */
     private const array HOLDING_STOCK = [OrderStatus::Confirmed, OrderStatus::Allocated, OrderStatus::Picking, OrderStatus::Packed];
+
+    /** The statuses an order can be edited in (or be on hold from): before picking starts. */
+    private const array EDITABLE = [OrderStatus::Pending, OrderStatus::Confirmed, OrderStatus::Allocated];
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME)]
@@ -113,7 +121,7 @@ class Order
     private int $version = 1;
 
     /** @var Collection<int, OrderLine> */
-    #[ORM\OneToMany(targetEntity: OrderLine::class, mappedBy: 'order', cascade: ['persist'])]
+    #[ORM\OneToMany(targetEntity: OrderLine::class, mappedBy: 'order', cascade: ['persist'], orphanRemoval: true)]
     #[ORM\OrderBy(['position' => 'ASC'])]
     private Collection $lines;
 
@@ -374,6 +382,118 @@ class Order
     }
 
     /**
+     * Whether the order can be edited now: pending, confirmed or allocated
+     * (or on hold from one of those), and nothing has shipped. Once picking
+     * starts, the warehouse works from what was printed.
+     */
+    public function canEdit(): bool
+    {
+        $status = OrderStatus::OnHold === $this->status ? $this->heldFrom : $this->status;
+
+        return \in_array($status, self::EDITABLE, true) && !$this->hasShipped();
+    }
+
+    /**
+     * Applies an edit. Lines' quantities change, lines go and come, and the
+     * customer's name, email and addresses are replaced; the total follows.
+     * One `edited` event records what changed, before and after. Returns null
+     * when the edit changes nothing (no event, nothing written).
+     *
+     * The stock is not touched here: OrderStock::follow() moves each touched
+     * line's reservation to match, in the same transaction.
+     *
+     * @throws OrderChangeRefused
+     * @throws \OverflowException when the new total is out of range
+     */
+    public function edit(OrderEdit $edit, Actor $actor, \DateTimeImmutable $now): ?OrderEvent
+    {
+        if (!$this->canEdit()) {
+            throw new OrderChangeRefused(\sprintf('Order %s cannot be edited while it is %s%s.', $this->number, str_replace('_', ' ', $this->status->value), $this->hasShipped() ? ' and partly shipped' : ''), OrderChangeRefused::NOT_EDITABLE);
+        }
+
+        $before = [];
+        $after = [];
+
+        $linesBefore = [];
+        $linesAfter = [];
+        foreach ($edit->quantities as $entry) {
+            $line = $this->ownLine($entry['line']);
+            if ($entry['quantity'] === $line->quantity()) {
+                continue;
+            }
+            $snapshot = $line->snapshot();
+            try {
+                $line->changeQuantity($entry['quantity']);
+            } catch (\InvalidArgumentException $e) {
+                throw new OrderChangeRefused($e->getMessage(), OrderChangeRefused::BELOW_DONE, $line->position());
+            }
+            $linesBefore[$line->position()] = $snapshot;
+            $linesAfter[$line->position()] = $line->snapshot();
+        }
+        foreach ($edit->removed as $line) {
+            $line = $this->ownLine($line);
+            if ($line->shippedQuantity() > 0) {
+                throw new OrderChangeRefused(\sprintf('Line %d (%s) has shipped units and cannot be removed.', $line->position(), $line->skuCode()), OrderChangeRefused::BELOW_DONE, $line->position());
+            }
+            $linesBefore[$line->position()] = $line->snapshot();
+            unset($linesAfter[$line->position()]);
+            $this->lines->removeElement($line);
+        }
+        $position = array_reduce($this->lines(), static fn (int $max, OrderLine $line): int => max($max, $line->position()), 0);
+        foreach ($edit->removed as $line) {
+            $position = max($position, $line->position());
+        }
+        foreach ($edit->added as $new) {
+            $line = new OrderLine($this, ++$position, $new);
+            $this->lines->add($line);
+            $linesAfter[$line->position()] = $line->snapshot();
+        }
+        if ([] !== $linesBefore || [] !== $linesAfter) {
+            ksort($linesBefore);
+            ksort($linesAfter);
+            $before['lines'] = array_values($linesBefore);
+            $after['lines'] = array_values($linesAfter);
+        }
+
+        if (null !== $edit->customerName && $edit->customerName !== $this->customerName) {
+            $before['customerName'] = $this->customerName;
+            $after['customerName'] = $this->customerName = $edit->customerName;
+        }
+        if ($edit->changeEmail && $edit->customerEmail !== $this->customerEmail) {
+            $before['customerEmail'] = $this->customerEmail;
+            $after['customerEmail'] = $this->customerEmail = $edit->customerEmail;
+        }
+        if (null !== $edit->shippingAddress && $edit->shippingAddress !== $this->shippingAddress) {
+            $before['shippingAddress'] = $this->shippingAddress;
+            $after['shippingAddress'] = $this->shippingAddress = $edit->shippingAddress;
+        }
+        if ($edit->changeBilling && $edit->billingAddress !== $this->billingAddress) {
+            $before['billingAddress'] = $this->billingAddress;
+            $after['billingAddress'] = $this->billingAddress = $edit->billingAddress;
+        }
+
+        if ([] === $after && [] === $before) {
+            return null;
+        }
+        if (0 === $this->remainingUnits()) {
+            throw new OrderChangeRefused(\sprintf('The edit would leave order %s with nothing to ship; cancel the order instead.', $this->number), OrderChangeRefused::NOTHING_LEFT);
+        }
+
+        $total = $this->totalAmount;
+        $this->recalculateTotal();
+        if ($total !== $this->totalAmount) {
+            $before['total'] = $total;
+            $after['total'] = $this->totalAmount;
+        }
+        $this->updatedAt = $now;
+
+        $event = new OrderEvent($this, OrderEvent::EDITED, null, $actor, $before, $after, $now);
+        $this->events->add($event);
+
+        return $event;
+    }
+
+    /**
      * Fixes a shipment's carrier and tracking number, typed wrong. Allowed
      * whatever the order's status: it changes no stock and no quantity.
      */
@@ -395,6 +515,74 @@ class Order
         $this->events->add($event);
 
         return $event;
+    }
+
+    /** Whether some units can be cancelled now: the order could be cancelled, and has units left to ship. */
+    public function canCancelUnits(): bool
+    {
+        return null !== OrderStateMachine::target($this->status, Transition::Cancel, $this->heldFrom) && $this->remainingUnits() > 0;
+    }
+
+    /**
+     * Cancels some units of some lines, but never what has shipped. The units
+     * stop being reserved and leave the totals; one `lines_cancelled` event
+     * records it. When nothing is left to ship, the order finishes through the
+     * state machine: shipped if any of it shipped, otherwise cancelled.
+     *
+     * @param non-empty-list<array{line: OrderLine, quantity: int}> $lines lines of this order
+     *
+     * @return list<array{line: OrderLine, released: int}> the reserved units each line gave up, for OrderStock to release
+     *
+     * @throws OrderChangeRefused
+     */
+    public function cancelUnits(array $lines, ?string $reason, Actor $actor, \DateTimeImmutable $now): array
+    {
+        if (!$this->canCancelUnits()) {
+            throw new OrderChangeRefused(\sprintf('Order %s has nothing to cancel while it is %s.', $this->number, str_replace('_', ' ', $this->status->value)), OrderChangeRefused::NOT_CANCELLABLE);
+        }
+
+        $cancelling = [];
+        foreach ($lines as $entry) {
+            $line = $this->ownLine($entry['line']);
+            $cancelling[$line->position()] = ($cancelling[$line->position()] ?? 0) + $entry['quantity'];
+            if ($entry['quantity'] < 1 || $cancelling[$line->position()] > $line->remainingQuantity()) {
+                throw new OrderChangeRefused(\sprintf('Line %d (%s) has %d left to cancel.', $line->position(), $line->skuCode(), $line->remainingQuantity()), OrderChangeRefused::EXCEEDS_REMAINING, $line->position());
+            }
+        }
+        if (array_sum($cancelling) === $this->remainingUnits() && OrderStatus::OnHold === $this->status && $this->hasShipped()) {
+            // It would finish as shipped, and shipped is not a status an order
+            // on hold can move to: the hold is someone's decision to undo first.
+            throw new OrderChangeRefused(\sprintf('Order %s is on hold; release it before cancelling the last of it.', $this->number), OrderChangeRefused::RELEASE_FIRST);
+        }
+
+        $total = $this->totalAmount;
+        $before = [];
+        $after = [];
+        $released = [];
+        foreach ($lines as $entry) {
+            $line = $entry['line'];
+            $before[] = ['position' => $line->position(), 'sku' => $line->skuCode(), 'cancelledQuantity' => $line->cancelledQuantity()];
+            $released[] = ['line' => $line, 'released' => $line->cancel($entry['quantity'])];
+            $after[] = ['position' => $line->position(), 'sku' => $line->skuCode(), 'name' => $line->name(), 'cancelled' => $entry['quantity'], 'cancelledQuantity' => $line->cancelledQuantity()];
+        }
+        $this->recalculateTotal();
+        $this->updatedAt = $now;
+
+        $this->events->add(new OrderEvent(
+            $this,
+            OrderEvent::LINES_CANCELLED,
+            null,
+            $actor,
+            ['lines' => $before, 'total' => $total],
+            ['lines' => $after, 'total' => $this->totalAmount, ...(null === $reason ? [] : ['reason' => $reason])],
+            $now,
+        ));
+
+        if (0 === $this->remainingUnits()) {
+            $this->apply($this->hasShipped() ? Transition::Ship : Transition::Cancel, $actor, $now);
+        }
+
+        return $released;
     }
 
     /**
@@ -469,9 +657,28 @@ class Order
         return $this->shipments->exists(static fn (int $key, Shipment $shipment): bool => !$shipment->isVoided());
     }
 
-    private function remainingUnits(): int
+    /** Units still to ship, over all lines: neither shipped nor cancelled. */
+    public function remainingUnits(): int
     {
         return array_sum(array_map(static fn (OrderLine $line): int => $line->remainingQuantity(), $this->lines()));
+    }
+
+    private function ownLine(OrderLine $line): OrderLine
+    {
+        if (!$this->lines->contains($line)) {
+            throw new \InvalidArgumentException(\sprintf('Line %d is not a line of order %s.', $line->position(), $this->number));
+        }
+
+        return $line;
+    }
+
+    private function recalculateTotal(): void
+    {
+        $total = Money::zero($this->currency);
+        foreach ($this->lines as $line) {
+            $total = $total->add($line->lineTotal());
+        }
+        $this->totalAmount = $total->amount;
     }
 
     /**

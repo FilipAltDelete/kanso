@@ -24,8 +24,8 @@ export function ShipDialog({ order, onClose }) {
   const carriersId = useId();
   const ship = useCreateShipment(order.id);
 
-  const open = order.lines.filter((line) => line.quantity - line.shippedQuantity > 0);
-  const [quantities, setQuantities] = useState(() => Object.fromEntries(open.map((line) => [line.id, String(line.quantity - line.shippedQuantity)])));
+  const open = order.lines.filter((line) => line.quantity - line.shippedQuantity - line.cancelledQuantity > 0);
+  const [quantities, setQuantities] = useState(() => Object.fromEntries(open.map((line) => [line.id, String(line.quantity - line.shippedQuantity - line.cancelledQuantity)])));
   const [carrier, setCarrier] = useState('');
   const [tracking, setTracking] = useState('');
   // When the parcel left, in the operator's local time; now, unless it was handed over earlier.
@@ -40,7 +40,7 @@ export function ShipDialog({ order, onClose }) {
 
   const number = new Intl.NumberFormat(locale);
   const rows = open.map((line) => {
-    const left = line.quantity - line.shippedQuantity;
+    const left = line.quantity - line.shippedQuantity - line.cancelledQuantity;
     const text = quantities[line.id] ?? '0';
     const value = /^\d+$/.test(text.trim()) ? Number(text.trim()) : null;
     const problem = value === null ? t('ship.errorWholeNumber') : value > left ? t('ship.errorTooMany', { left: number.format(left) }) : null;

@@ -26,6 +26,10 @@ class OrderEvent
     public const string NOTE = 'note';
     public const string TAGS_CHANGED = 'tags_changed';
     public const string PAYMENT_STATUS_CHANGED = 'payment_status_changed';
+    /** Lines, the customer or the addresses edited before fulfillment; before/after hold only what changed. */
+    public const string EDITED = 'edited';
+    /** Some units of some lines cancelled; the rest of the order goes on. */
+    public const string LINES_CANCELLED = 'lines_cancelled';
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME)]

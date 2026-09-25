@@ -9,11 +9,11 @@ import { Button, Card, Checkbox, ErrorNotice, Input, Select } from '../../compon
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney, parseMoney } from '../../lib/money.js';
 
-const EMPTY_ADDRESS = { name: '', line1: '', line2: '', postalCode: '', city: '', region: '', countryCode: 'SE', phone: '' };
+export const EMPTY_ADDRESS = { name: '', line1: '', line2: '', postalCode: '', city: '', region: '', countryCode: 'SE', phone: '' };
 const emptyLine = () => ({ key: crypto.randomUUID(), sku: '', name: '', quantity: '1', unitPrice: '' });
 
 /** Blank strings are left out, so optional fields reach the API as absent. */
-function compact(values) {
+export function compact(values) {
   return Object.fromEntries(Object.entries(values).filter(([, value]) => value.trim() !== '').map(([key, value]) => [key, value.trim()]));
 }
 
@@ -250,7 +250,7 @@ export function CreateOrderPage() {
   );
 }
 
-function AddressFields({ legend, path, value, onChange, errors }) {
+export function AddressFields({ legend, path, value, onChange, errors }) {
   const { t } = useI18n();
   const field = (name, props = {}) => (
     <Field label={t(`address.${name}`)} required={props.required} error={errors[`${path}.${name}`]}>

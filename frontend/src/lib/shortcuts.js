@@ -37,6 +37,7 @@ export const SHORTCUTS = [
 
   { id: 'order.advance', keys: ['a'], group: 'orderDetail', labelKey: 'shortcuts.order.advance' },
   { id: 'order.ship', keys: ['s'], group: 'orderDetail', labelKey: 'shortcuts.order.ship' },
+  { id: 'order.edit', keys: ['e'], group: 'orderDetail', labelKey: 'shortcuts.order.edit' },
   { id: 'order.note', keys: ['n'], group: 'orderDetail', labelKey: 'shortcuts.order.note' },
   { id: 'order.tag', keys: ['t'], group: 'orderDetail', labelKey: 'shortcuts.order.tag' },
   { id: 'order.print', keys: ['p'], group: 'orderDetail', labelKey: 'shortcuts.order.print' },
