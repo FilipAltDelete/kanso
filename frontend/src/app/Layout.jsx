@@ -10,7 +10,6 @@ const upcoming = [
   { key: 'nav.orders', icon: ShoppingCart },
   { key: 'nav.inventory', icon: Boxes },
   { key: 'nav.products', icon: Package },
-  { key: 'nav.customers', icon: Users },
 ];
 
 export function Layout() {
@@ -42,6 +41,14 @@ export function Layout() {
               <Badge className="ml-auto">{t('nav.comingSoon')}</Badge>
             </span>
           ))}
+          <Link
+            to="/customers"
+            className="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+            activeProps={{ className: 'bg-slate-100 font-medium text-slate-900' }}
+          >
+            <Users className="size-4" aria-hidden="true" />
+            {t('nav.customers')}
+          </Link>
           <Link
             to="/settings"
             className="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 md:mt-4"

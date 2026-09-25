@@ -37,6 +37,7 @@ security:
 
     access_control:
         - { path: ^/api/auth/(login|refresh|logout)$, roles: PUBLIC_ACCESS }
+        - { path: '^/api/customers(/|$)', methods: [POST, PUT, PATCH, DELETE], roles: ROLE_OPERATOR }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:

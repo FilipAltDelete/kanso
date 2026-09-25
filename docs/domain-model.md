@@ -1,6 +1,6 @@
 # Domain model (draft)
 
-Phase 0 deliverable: the entities Phase 1 builds. Only `User` exists in code today. Names and fields will change as Phase 1 lands; update this file when they do.
+Phase 0 deliverable: the entities Phase 1 builds. In code today: `User`, `ApiKey`, and `Customer` with `CustomerAddress` and `CustomerEvent`. Names and fields will change as Phase 1 lands; update this file when they do.
 
 ```mermaid
 erDiagram
@@ -21,7 +21,9 @@ erDiagram
 |---|---|---|
 | User | Signs in to the web UI | email, name, roles, enabled |
 | Channel | Where an order came from (manual, CSV, Shopify…) | code, type, currency |
-| Customer | Buyer | email, name, addresses |
+| Customer | Buyer | email (unique, case-insensitive), name, phone |
+| CustomerAddress | A customer's billing or shipping address; several of each, one default per type | type, is_default, recipient, company, lines, postal_code, city, region, country_code (ISO 3166-1), phone |
+| CustomerEvent | Audit trail of customer changes | customer, type (created/updated), actor, changes (before/after per field), occurred_at |
 | Order | The core object | number, channel, customer, status, currency, totals (minor units), placed_at, version |
 | OrderLine | One SKU on an order | sku, quantity, unit_price (minor units), quantity_shipped |
 | Product (SKU) | What is sold and stocked | sku, name, barcode, weight |
