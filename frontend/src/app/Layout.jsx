@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Keyboard,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -16,7 +15,7 @@ import {
 import { Button } from '../components/ui/primitives.jsx';
 import { useAuth } from '../features/auth/AuthProvider.jsx';
 import { useI18n } from '../lib/i18n.jsx';
-import { useShortcutHelp, useShortcuts } from '../lib/ShortcutsProvider.jsx';
+import { useShortcuts } from '../lib/ShortcutsProvider.jsx';
 import { cn } from '../lib/utils.js';
 import { LanguageSelect } from './LanguageSelect.jsx';
 import { NavFolder, NavLink } from './nav/NavLink.jsx';
@@ -55,7 +54,6 @@ export function Layout() {
   const [folders, setFolders] = useState(loadFolders);
   // Hiding a link is a courtesy; the API's voters are what refuse.
   const isAdmin = user?.roles?.includes('ROLE_ADMIN') ?? false;
-  const openShortcuts = useShortcutHelp();
   useGlobalShortcuts();
 
   function toggleCollapsed() {
@@ -183,18 +181,6 @@ export function Layout() {
               </NavFolder>
             )
           ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={openShortcuts}
-            aria-keyshortcuts="?"
-            title={collapsed ? t('shortcuts.title') : undefined}
-            aria-label={collapsed ? t('shortcuts.title') : undefined}
-            className={cn('w-full', collapsed ? 'justify-center px-0' : 'justify-start')}
-          >
-            <Keyboard aria-hidden="true" className="size-4" />
-            {collapsed ? null : t('shortcuts.title')}
-          </Button>
           <NavLink href="/settings" icon={Settings} active={active === '/settings'} collapsed={collapsed}>
             {t('nav.settings')}
           </NavLink>

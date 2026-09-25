@@ -104,12 +104,14 @@ describe('keyboard shortcuts on the order pages', () => {
       expect(within(dialog).getByText('Go to orders')).toBeTruthy();
     });
 
-    it('opens the list of shortcuts from the menu', async () => {
+    it('opens the list of shortcuts with ?, showing the order list\'s own', async () => {
       answer();
       renderApp('/orders');
       await screen.findByRole('link', { name: '10001' });
+      // The list lives in Settings and behind ?, not in the menu.
+      expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Keyboard shortcuts' }));
+      press('?', document.body, { shiftKey: true });
       const dialog = screen.getByRole('dialog', { name: 'Keyboard shortcuts' });
       const list = within(dialog).getByRole('region', { name: 'Order list' });
       expect(within(list).getByText('New order')).toBeTruthy();

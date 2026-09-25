@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Keyboard } from 'lucide-react';
+import { Button, Checkbox } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
+import { useShortcutSettings } from '../../lib/ShortcutsProvider.jsx';
 import { saveTheme, savedTheme, THEMES } from '../../lib/theme.js';
 import { cn } from '../../lib/utils.js';
 
@@ -84,6 +86,43 @@ export function SettingsPage() {
         </div>
         <p className="mt-3 text-xs text-slate-500">{t('settings.rememberedHere')}</p>
       </section>
+
+      <ShortcutSettings />
     </div>
+  );
+}
+
+/**
+ * Keyboard shortcuts: on or off (saved in this browser), and the list of them.
+ * The list also opens with "?" on any page.
+ */
+function ShortcutSettings() {
+  const { t } = useI18n();
+  const { enabled, setEnabled, openHelp } = useShortcutSettings();
+
+  if (!setEnabled) return null;
+
+  return (
+    <section aria-labelledby="shortcuts-heading" className="space-y-3">
+      <h2 id="shortcuts-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {t('shortcuts.title')}
+      </h2>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-900">
+          <Checkbox checked={enabled} onChange={(event) => setEnabled(event.target.checked)} aria-describedby="settings-shortcuts-hint" />
+          {t('shortcuts.enabled')}
+        </label>
+        <p id="settings-shortcuts-hint" className="text-xs text-slate-500">
+          {t('shortcuts.enabledHint')}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" size="sm" onClick={openHelp} aria-keyshortcuts="?">
+          <Keyboard className="size-4" aria-hidden="true" />
+          {t('shortcuts.help')}
+        </Button>
+        <span className="text-xs text-slate-500">{t('settings.shortcutsAnywhere')}</span>
+      </div>
+    </section>
   );
 }

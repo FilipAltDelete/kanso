@@ -61,7 +61,7 @@ export function ShortcutsProvider({ children }) {
     setEnabledState(next);
   }, []);
 
-  const value = useMemo(() => ({ register, openHelp, enabled }), [register, openHelp, enabled]);
+  const value = useMemo(() => ({ register, openHelp, enabled, setEnabled }), [register, openHelp, enabled, setEnabled]);
 
   return (
     <ShortcutsContext.Provider value={value}>
@@ -101,6 +101,13 @@ export function useShortcuts(map) {
 /** Opens the shortcut list; for a button that makes the shortcuts discoverable. */
 export function useShortcutHelp() {
   return useContext(ShortcutsContext)?.openHelp;
+}
+
+/** Whether single-key shortcuts are on, and the switch; for the settings page. */
+export function useShortcutSettings() {
+  const context = useContext(ShortcutsContext);
+
+  return { enabled: context?.enabled ?? false, setEnabled: context?.setEnabled, openHelp: context?.openHelp };
 }
 
 function ShortcutHelpDialog({ registered, enabled, onEnabledChange, onClose }) {
