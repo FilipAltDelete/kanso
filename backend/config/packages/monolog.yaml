@@ -1,0 +1,25 @@
+monolog:
+    handlers:
+        main:
+            type: stream
+            # stderr, not stdout: a console command's stdout is its output.
+            path: 'php://stderr'
+            level: info
+            formatter: monolog.formatter.json
+
+when@dev:
+    monolog:
+        handlers:
+            main:
+                level: debug
+                # Every event dispatch is a debug line; they drown the rest.
+                channels: ['!event']
+
+when@test:
+    monolog:
+        handlers:
+            main:
+                type: stream
+                path: 'php://stderr'
+                level: error
+                formatter: monolog.formatter.json

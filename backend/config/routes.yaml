@@ -1,0 +1,12 @@
+# Kanso's own controllers first, so a literal path is never captured by an
+# API Platform item route.
+kanso_controllers:
+    resource:
+        path: '../src/Api/Controller/'
+        namespace: 'Kanso\Api\Controller'
+    type: attribute
+
+api_platform:
+    resource: .
+    type: api_platform
+    prefix: /api

@@ -1,0 +1,60 @@
+parameters:
+    kanso.version: '0.1.0-dev'
+    # Which Redis database a test run uses (see when@test below).
+    env(KANSO_TEST_REDIS_DB): '15'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        bind:
+            # Environment reaches application code only as bound parameters.
+            $adminEmail: '%env(string:default::KANSO_ADMIN_EMAIL)%'
+            $adminPassword: '%env(string:default::KANSO_ADMIN_PASSWORD)%'
+            $environment: '%kernel.environment%'
+            $loginLimiter: '@limiter.login'
+
+    Kanso\:
+        resource: '../src/'
+        exclude:
+            - '../src/Kernel.php'
+            - '../src/Domain/User/User.php'
+            - '../src/Domain/User/Role.php'
+            - '../src/Domain/Security/IssuedTokens.php'
+            - '../src/Application/Exception/'
+            - '../src/Api/Resource/'
+
+    Kanso\Api\Controller\:
+        resource: '../src/Api/Controller/'
+        tags: ['controller.service_arguments']
+
+    # Layering: Api/Cli -> Application -> Domain <- Infrastructure. The layers
+    # above depend on these Domain interfaces; Infrastructure implements them.
+    Kanso\Domain\User\UserStoreInterface: '@Kanso\Infrastructure\Doctrine\Repository\UserRepository'
+    Kanso\Domain\Security\PasswordHasherInterface: '@Kanso\Infrastructure\Security\SymfonyPasswordHasher'
+    Kanso\Domain\Security\AccessTokenIssuerInterface: '@Kanso\Infrastructure\Security\LexikAccessTokenIssuer'
+    Kanso\Domain\Security\RefreshTokenStoreInterface: '@Kanso\Infrastructure\Security\RedisRefreshTokenStore'
+    Kanso\Domain\Health\HealthCheckInterface: '@Kanso\Infrastructure\Health\HealthChecker'
+
+    Kanso\Infrastructure\Security\LexikAccessTokenIssuer:
+        arguments:
+            $ttl: '%lexik_jwt_authentication.token_ttl%'
+
+    # Redis serves cache, locks and refresh tokens — never queue data.
+    Redis:
+        class: Redis
+        factory: ['Symfony\Component\Cache\Adapter\RedisAdapter', 'createConnection']
+        arguments:
+            - '%env(REDIS_URL)%'
+            - { lazy: true }
+
+when@test:
+    services:
+        # The suite flushes its Redis database, so it must not share one with a
+        # running installation.
+        Redis:
+            class: Redis
+            factory: ['Symfony\Component\Cache\Adapter\RedisAdapter', 'createConnection']
+            arguments:
+                - '%env(REDIS_URL)%/%env(KANSO_TEST_REDIS_DB)%'
+                - { lazy: true }

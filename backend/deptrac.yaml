@@ -1,0 +1,43 @@
+# Layer boundaries (same as Pimsen): Api/Cli -> Application -> Domain <- Infrastructure.
+deptrac:
+  paths:
+    - ./src
+  layers:
+    - name: Domain
+      collectors:
+        - type: directory
+          value: src/Domain/.*
+    - name: Application
+      collectors:
+        - type: directory
+          value: src/Application/.*
+    - name: Infrastructure
+      collectors:
+        - type: directory
+          value: src/Infrastructure/.*
+    - name: Api
+      collectors:
+        - type: directory
+          value: src/Api/.*
+    - name: Cli
+      collectors:
+        - type: directory
+          value: src/Cli/.*
+    - name: Kernel
+      collectors:
+        - type: classLike
+          value: ^Kanso\\Kernel$
+
+  ruleset:
+    Domain: ~
+    Application:
+      - Domain
+    Infrastructure:
+      - Domain
+    Api:
+      - Domain
+      - Application
+    Cli:
+      - Domain
+      - Application
+    Kernel: ~

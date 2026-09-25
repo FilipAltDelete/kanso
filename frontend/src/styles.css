@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+/*
+ * As in Pimsen: style on the slate scale and bg-white, and use `accent` for
+ * the primary action, so themes can be added later as variable overrides.
+ */
+@theme {
+  --color-accent: var(--color-slate-900);
+  --color-accent-hover: var(--color-slate-700);
+  --color-accent-fg: var(--color-white);
+}
+
+body {
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-900);
+}

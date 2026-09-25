@@ -1,0 +1,11 @@
+# The build installs its own dependencies; never ship the host's dev vendor.
+backend/vendor/
+backend/var/
+backend/.phpunit.cache/
+backend/.php-cs-fixer.cache
+frontend/node_modules/
+frontend/dist/
+.git/
+.env
+docs/
+*.md

@@ -1,0 +1,27 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Kanso\Kernel;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Dotenv\Dotenv;
+
+if (!is_file(dirname(__DIR__).'/vendor/autoload.php')) {
+    throw new LogicException('Run "composer install" first.');
+}
+
+require dirname(__DIR__).'/vendor/autoload.php';
+
+if (file_exists(dirname(__DIR__).'/.env')) {
+    (new Dotenv())->usePutenv(false)->loadEnv(dirname(__DIR__).'/.env');
+}
+
+$input = new ArgvInput();
+$env = $input->getParameterOption(['--env', '-e'], $_SERVER['APP_ENV'] ?? 'prod', true);
+$debug = ('prod' !== $env) && !$input->hasParameterOption('--no-debug', true);
+
+$kernel = new Kernel((string) $env, (bool) $debug);
+$application = new Application($kernel);
+exit($application->run($input));

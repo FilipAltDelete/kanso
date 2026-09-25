@@ -1,0 +1,39 @@
+security:
+    password_hashers:
+        Kanso\Infrastructure\Security\AuthenticatedUser:
+            # Argon2id through libsodium; `auto` would fall back to bcrypt in
+            # the official images, which lack libargon2.
+            algorithm: sodium
+
+    providers:
+        kanso_users:
+            id: Kanso\Infrastructure\Security\UserProvider
+
+    role_hierarchy:
+        ROLE_OPERATOR: [ROLE_VIEWER]
+        ROLE_ADMIN: [ROLE_OPERATOR]
+
+    firewalls:
+        health:
+            pattern: ^/health
+            security: false
+        api:
+            pattern: ^/api
+            # No sessions: every request carries its own credentials.
+            stateless: true
+            provider: kanso_users
+            entry_point: Kanso\Api\Http\ProblemEntryPoint
+            access_denied_handler: Kanso\Api\Http\ProblemAccessDeniedHandler
+            jwt: ~
+
+    access_control:
+        - { path: ^/api/auth/(login|refresh|logout)$, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
+
+when@test:
+    security:
+        password_hashers:
+            # Tests create users constantly; argon2id would dominate the runtime.
+            Kanso\Infrastructure\Security\AuthenticatedUser:
+                algorithm: plaintext
+                ignore_case: false

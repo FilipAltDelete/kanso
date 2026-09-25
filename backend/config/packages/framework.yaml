@@ -1,0 +1,52 @@
+framework:
+    secret: '%env(APP_SECRET)%'
+    http_method_override: false
+    handle_all_throwables: true
+    trusted_proxies: '%env(default::TRUSTED_PROXIES)%'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port']
+
+    # No sessions, ever (same rule as Pimsen): auth is a JWT plus a refresh cookie.
+    session: false
+
+    php_errors:
+        log: true
+
+    serializer:
+        enabled: true
+
+    validation:
+        enable_attributes: true
+
+    cache:
+        app: cache.adapter.redis
+        default_redis_provider: '%env(REDIS_URL)%'
+        pools:
+            # Its own pool: clearing the application cache must not hand every
+            # client a fresh login allowance.
+            kanso.rate_limiter:
+                adapter: cache.adapter.redis
+                provider: '%env(REDIS_URL)%'
+
+    lock: '%env(REDIS_URL)%'
+
+    rate_limiter:
+        login:
+            policy: sliding_window
+            limit: 10
+            interval: '15 minutes'
+            cache_pool: kanso.rate_limiter
+
+when@dev:
+    framework:
+        rate_limiter:
+            login:
+                # A development stack is signed into over and over from one
+                # address; a lockout there protects nothing.
+                limit: 10000
+
+when@test:
+    framework:
+        test: true
+        cache:
+            app: cache.adapter.array
+        lock: 'flock'

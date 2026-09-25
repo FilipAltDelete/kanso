@@ -1,0 +1,27 @@
+api_platform:
+    title: 'Kanso OMS'
+    description: 'Order management — one installation per customer.'
+    version: '%kanso.version%'
+
+    mapping:
+        paths: ['%kernel.project_dir%/src/Api/Resource']
+
+    formats:
+        jsonld: ['application/ld+json']
+        json: ['application/json']
+
+    docs_formats:
+        # /api/docs.json is the documented entry point for integrations.
+        json: ['application/json']
+        jsonopenapi: ['application/vnd.openapi+json']
+
+    defaults:
+        stateless: true
+        pagination_items_per_page: 50
+        pagination_maximum_items_per_page: 500
+        pagination_client_items_per_page: true
+
+    use_symfony_listeners: true
+
+    graphql:
+        enabled: false

@@ -1,0 +1,9 @@
+/backend/vendor/
+/backend/var/
+/backend/.php-cs-fixer.cache
+/backend/.phpunit.cache/
+/backend/.deptrac.cache
+# Local compose overrides and secrets. `.env.example` shows what can go here.
+/.env
+/frontend/node_modules/
+/frontend/dist/

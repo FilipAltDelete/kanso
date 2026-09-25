@@ -1,0 +1,37 @@
+framework:
+    messenger:
+        failure_transport: failed
+
+        # Queues are rows in `messenger_messages` in this installation's MySQL —
+        # there is no broker (as in Pimsen). Integrations get their own
+        # transports when they arrive (Phase 2).
+        transports:
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    queue_name: async
+                    auto_setup: false
+                    redeliver_timeout: 300
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 3
+            failed:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options: { queue_name: failed, auto_setup: false }
+
+        routing: {}
+
+        buses:
+            messenger.bus.default:
+                middleware:
+                    # Workers are long-running, so isolation is engineered here.
+                    - doctrine_ping_connection
+                    - doctrine_close_connection
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                async: 'in-memory://'
+                failed: 'in-memory://'

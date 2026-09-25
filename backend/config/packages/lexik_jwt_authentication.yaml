@@ -1,0 +1,8 @@
+lexik_jwt_authentication:
+    # Keys arrive as environment variables like every other secret; base64 so a
+    # PEM survives a single line. `bin/console kanso:jwt:generate-keys` prints a pair.
+    secret_key: '%env(base64:JWT_SECRET_KEY)%'
+    public_key: '%env(base64:JWT_PUBLIC_KEY)%'
+    pass_phrase: '%env(string:default::JWT_PASSPHRASE)%'
+    token_ttl: 900          # 15 minutes; the refresh cookie carries the long life
+    user_id_claim: sub      # `sub` is the user id, not an address that can change

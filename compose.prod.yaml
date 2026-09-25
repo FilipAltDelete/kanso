@@ -1,0 +1,26 @@
+# Overlay that runs the images as a deployment would: no bind mounts, no dev
+# php.ini, APP_ENV=prod, so the baked container cache and OPcache preloading are
+# the ones actually exercised.
+#
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build api worker frontend proxy
+#
+# `volumes: []` would *merge* with the base list and change nothing — Compose
+# needs `!reset` to drop it.
+x-prod: &prod
+  environment:
+    APP_ENV: prod
+    APP_DEBUG: "0"
+  volumes: !reset []
+
+services:
+  migrate: *prod
+  install: *prod
+  api: *prod
+  worker: *prod
+
+  # The shipped bundle behind Nginx instead of the dev server.
+  frontend:
+    build:
+      target: web
+    volumes: !reset []
+    environment: !reset {}
