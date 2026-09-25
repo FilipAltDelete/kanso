@@ -52,6 +52,7 @@ services:
             # Entities and values, not services.
             - '../src/Domain/Common/{Actor,Page,PageRequest,ConcurrentModification}.php'
             - '../src/Domain/Catalog/{Product,ProductEvent}.php'
+            - '../src/Domain/Import/ImportRun.php'
             - '../src/Domain/Inventory/{Address,Location,InventoryLevel,InventoryMovement,StockChange,StockRuleViolated,AdjustmentReason,MovementType}.php'
             - '../src/Api/Resource/'
 
@@ -70,6 +71,7 @@ services:
     Kanso\Core\Internal\Domain\Order\ChannelStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ChannelRepository'
     Kanso\Core\Internal\Domain\Common\TransactionInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\DoctrineTransaction'
     Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ProductRepository'
+    Kanso\Core\Internal\Domain\Import\ImportRunStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ImportRunRepository'
     Kanso\Core\Internal\Domain\Inventory\LocationStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\LocationRepository'
     Kanso\Core\Internal\Domain\Inventory\InventoryStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\InventoryRepository'
     Kanso\Core\Internal\Domain\Customer\CustomerStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\CustomerRepository'

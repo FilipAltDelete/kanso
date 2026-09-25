@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { api } from './client.js';
+import { importQuery } from './importRuns.js';
 
 export const orderImportResultSchema = z.object({
   dryRun: z.boolean(),
@@ -10,6 +11,7 @@ export const orderImportResultSchema = z.object({
   existing: z.number().int(),
   failed: z.number().int(),
   errors: z.array(z.object({ row: z.number().int(), reference: z.string().nullable(), field: z.string(), code: z.string(), message: z.string() })),
+  importRunId: z.string().nullish(),
 });
 
 /** `{ file, dryRun }`: a dry run is the preview, and writes nothing (ADR-0008). */
@@ -18,9 +20,11 @@ export function useImportOrders() {
 
   return useMutation({
     mutationFn: async ({ file, dryRun }) =>
-      orderImportResultSchema.parse(await api(`/api/order-imports?dryRun=${dryRun ? 'true' : 'false'}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } })),
+      orderImportResultSchema.parse(await api(`/api/order-imports?${importQuery(file, dryRun)}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } })),
     onSuccess: (result) => {
-      if (!result.dryRun) queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (result.dryRun) return;
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['importRuns'] });
     },
   });
 }

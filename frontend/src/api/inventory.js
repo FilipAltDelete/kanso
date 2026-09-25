@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { api } from './client.js';
+import { importQuery } from './importRuns.js';
 
 /** Why stock was adjusted; the API's list, in the order the dialog offers them. */
 export const ADJUSTMENT_REASONS = ['received', 'count', 'damaged', 'lost', 'found', 'returned', 'correction', 'other'];
@@ -217,19 +218,21 @@ export const importResultSchema = z.object({
   unchanged: z.number().int(),
   failed: z.number().int(),
   errors: z.array(z.object({ row: z.number().int(), sku: z.string().nullable(), field: z.string(), code: z.string(), message: z.string() })),
+  importRunId: z.string().nullish(),
 });
 
 /** `{ file, dryRun }`: a dry run is the preview, and writes nothing. */
 export function useImportProducts() {
+  const queryClient = useQueryClient();
   const refresh = useCatalogRefresh('products');
 
   return useMutation({
     mutationFn: async ({ file, dryRun }) =>
-      importResultSchema.parse(
-        await api(`/api/product-imports?dryRun=${dryRun ? 'true' : 'false'}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } }),
-      ),
+      importResultSchema.parse(await api(`/api/product-imports?${importQuery(file, dryRun)}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } })),
     onSuccess: (result) => {
-      if (!result.dryRun) refresh();
+      if (result.dryRun) return;
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ['importRuns'] });
     },
   });
 }

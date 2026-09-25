@@ -8,7 +8,9 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use Kanso\Core\Internal\Api\Resource\OrderImportResource;
 use Kanso\Core\Internal\Api\Security\CurrentActor;
+use Kanso\Core\Internal\Application\Import\ImportLog;
 use Kanso\Core\Internal\Application\Order\OrderImporter;
+use Kanso\Core\Internal\Domain\Import\ImportRun;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -18,6 +20,7 @@ final class OrderImportProcessor implements ProcessorInterface
 {
     public function __construct(
         private readonly OrderImporter $importer,
+        private readonly ImportLog $log,
         private readonly CurrentActor $actor,
     ) {
     }
@@ -26,11 +29,12 @@ final class OrderImportProcessor implements ProcessorInterface
     {
         $request = $context['request'] ?? null;
         \assert($request instanceof Request);
+        $actor = $this->actor->get();
 
         $result = $this->importer->import(
             $request->getContent(),
             \in_array(strtolower((string) $request->query->get('dryRun', '')), ['1', 'true'], true),
-            $this->actor->get(),
+            $actor,
         );
 
         $resource = new OrderImportResource();
@@ -41,6 +45,11 @@ final class OrderImportProcessor implements ProcessorInterface
         $resource->existing = $result->existing;
         $resource->failed = $result->failed;
         $resource->errors = $result->errors;
+
+        if (!$result->dryRun) {
+            $counts = ['rows' => $result->rows, 'orders' => $result->orders, 'created' => $result->created, 'existing' => $result->existing, 'failed' => $result->failed];
+            $resource->importRunId = $this->log->record(ImportRun::ORDERS, $request->query->getString('filename'), $actor, $counts, $result->errors)->id()->toRfc4122();
+        }
 
         return $resource;
     }

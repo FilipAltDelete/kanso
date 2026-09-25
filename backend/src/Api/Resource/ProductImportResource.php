@@ -27,8 +27,11 @@ use Kanso\Core\Internal\Api\State\ProductImportProcessor;
             deserialize: false,
             processor: ProductImportProcessor::class,
             security: "is_granted('ROLE_OPERATOR')",
+            // Every field, every time: `importRunId` is null on a preview, not absent.
+            normalizationContext: ['skip_null_values' => false],
             parameters: [
                 'dryRun' => new QueryParameter(schema: ['type' => 'boolean'], description: 'Check and count without writing anything: the preview. Default false.'),
+                'filename' => new QueryParameter(schema: ['type' => 'string', 'maxLength' => 255], description: 'The file\'s name, for the import history (ADR-0014). Optional.'),
             ],
             openapi: new OpenApiOperation(
                 summary: 'Create and update products from a CSV file, matched by SKU.',
@@ -54,6 +57,8 @@ final class ProductImportResource
     public int $unchanged = 0;
     /** Rows skipped because of the problems in `errors`. */
     public int $failed = 0;
+    /** The import's entry in the history (`/api/import-runs/{id}`); null on a dry run, which is not recorded. */
+    public ?string $importRunId = null;
 
     /** @var list<array{row: int, sku: ?string, field: string, code: string, message: string}> */
     #[ApiProperty(schema: [
