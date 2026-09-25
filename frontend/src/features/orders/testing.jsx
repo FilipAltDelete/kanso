@@ -38,6 +38,8 @@ export function orderFixture(overrides = {}) {
     status: 'pending',
     channel: { code: 'manual', name: 'Manual' },
     currency: 'SEK',
+    paymentStatus: 'unpaid',
+    tags: [],
     total: 69650,
     customer: { id: null, name: 'Anna Andersson', email: 'anna@example.com' },
     lineCount: 2,

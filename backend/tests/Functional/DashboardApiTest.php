@@ -45,9 +45,11 @@ final class DashboardApiTest extends WebTestCase
         $this->createOrder($sku, 1, new \DateTimeImmutable('-2 days'));
 
         $first = $this->move($first, 'confirm');
-        foreach (['confirm', 'allocate', 'start_picking', 'pack', 'ship'] as $transition) {
+        foreach (['confirm', 'allocate', 'start_picking', 'pack'] as $transition) {
             $second = $this->move($second, $transition);
         }
+        // An order ships through its shipments (ADR-0009); the last one ships it.
+        $second = $this->shipAll($second);
         self::assertSame('confirmed', $first['status']);
         self::assertSame('shipped', $second['status']);
 
@@ -161,6 +163,22 @@ final class DashboardApiTest extends WebTestCase
     private function move(array $order, string $transition): array
     {
         $this->request('POST', '/api/orders/'.$order['id'].'/transitions', $this->operator, ['transition' => $transition, 'version' => $order['version']]);
+        self::assertResponseIsSuccessful((string) $this->client->getResponse()->getContent());
+
+        return $this->json();
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     *
+     * @return array<string, mixed>
+     */
+    private function shipAll(array $order): array
+    {
+        $this->request('POST', '/api/orders/'.$order['id'].'/shipments', $this->operator, [
+            'version' => $order['version'],
+            'lines' => array_map(static fn (array $line): array => ['lineId' => $line['id'], 'quantity' => $line['quantity']], $order['lines']),
+        ]);
         self::assertResponseIsSuccessful((string) $this->client->getResponse()->getContent());
 
         return $this->json();

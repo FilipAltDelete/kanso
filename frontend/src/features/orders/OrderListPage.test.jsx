@@ -7,6 +7,8 @@ vi.mock('../../api/client.js', () => ({ api: vi.fn(), ApiError: class extends Er
 function answer({ orders = [orderFixture()], total = orders.length } = {}) {
   api.mockImplementation(async (path) => {
     if (path.startsWith('/api/channels')) return channelsFixture;
+    if (path.startsWith('/api/order-tags')) return { member: [{ name: 'VIP', orders: 3 }, { name: 'gift wrap', orders: 1 }] };
+    if (path === '/api/orders/bulk-tags') return null;
     if (path.startsWith('/api/orders?')) return { member: orders, totalItems: total };
     throw new Error(`Unexpected ${path}`);
   });
@@ -15,6 +17,17 @@ function answer({ orders = [orderFixture()], total = orders.length } = {}) {
 const lastListQuery = () => new URLSearchParams(api.mock.calls.map(([path]) => path).filter((path) => path.startsWith('/api/orders?')).at(-1).split('?')[1]);
 
 describe('the order list', () => {
+  beforeAll(() => {
+    // jsdom has <dialog> but not its modal behaviour.
+    HTMLDialogElement.prototype.showModal ??= function showModal() {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close ??= function close() {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+  });
+
   beforeEach(() => {
     api.mockReset();
   });
@@ -80,5 +93,53 @@ describe('the order list', () => {
     renderAt('/orders');
 
     expect(await screen.findByText(/No orders yet/)).toBeTruthy();
+  });
+
+  it('shows the payment status and tags, and filters by them', async () => {
+    answer({ orders: [orderFixture({ paymentStatus: 'paid', tags: ['VIP', 'gift wrap'] })] });
+    renderAt('/orders', { locale: 'sv' });
+
+    const row = (await screen.findByRole('link', { name: '10001' })).closest('tr');
+    expect(within(row).getByText('Betald')).toBeTruthy();
+    expect(within(row).getByText('VIP')).toBeTruthy();
+    expect(within(row).getByText('gift wrap')).toBeTruthy();
+
+    await waitFor(() => expect(within(screen.getByLabelText('Taggar')).getByRole('option', { name: 'VIP' })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Taggar'), { target: { value: 'VIP' } });
+    await waitFor(() => expect(lastListQuery().get('tag')).toBe('VIP'));
+
+    fireEvent.change(screen.getByLabelText('Betalning'), { target: { value: 'refunded' } });
+    await waitFor(() => expect(lastListQuery().get('paymentStatus')).toBe('refunded'));
+  });
+
+  it('tags the selected orders from the bulk-action bar', async () => {
+    answer({ orders: [orderFixture(), orderFixture({ '@id': '/api/orders/o2', id: 'o2', number: '10002' })] });
+    renderAt('/orders');
+    await screen.findByRole('link', { name: '10001' });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /10001/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /10002/ }));
+    const bar = screen.getByRole('region', { name: 'Bulk actions' });
+    fireEvent.click(within(bar).getByRole('button', { name: 'Add tag' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Add a tag to the selected orders (2)' });
+    fireEvent.change(within(dialog).getByLabelText('Tag'), { target: { value: 'a,b' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add tag' }));
+    expect(within(dialog).getByText(/without commas/)).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText('Tag'), { target: { value: '  Rush ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add tag' }));
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders/bulk-tags', { method: 'POST', body: { orders: ['o1', 'o2'], add: ['Rush'] } }));
+    expect(await screen.findByText('Tag “Rush” added to the selected orders (2).')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Bulk actions' })).toBeNull();
+  });
+
+  it('offers a viewer no bulk actions', async () => {
+    answer();
+    renderAt('/orders', { user: viewer });
+
+    await screen.findByRole('link', { name: '10001' });
+    expect(screen.queryByRole('checkbox', { name: /10001/ })).toBeNull();
   });
 });

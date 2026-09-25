@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\QueryParameter;
+use Kanso\Core\Internal\Api\State\AnnotateOrderProcessor;
 use Kanso\Core\Internal\Api\State\CreateOrderProcessor;
 use Kanso\Core\Internal\Api\State\CreateShipmentProcessor;
 use Kanso\Core\Internal\Api\State\OrderProvider;
@@ -20,6 +21,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
  * An order as the API shows it. Money is integer minor units of `currency`;
  * timestamps are UTC. The list shows the summary fields; the detail adds
  * addresses, lines, the event timeline and the transitions allowed now.
+ * Notes are events in the timeline, of type `note`.
  */
 #[ApiResource(
     shortName: 'Order',
@@ -34,6 +36,8 @@ use Symfony\Component\Serializer\Attribute\Groups;
                 'placedFrom' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed at or after this instant (ISO 8601 with offset, or a date meaning UTC midnight).'),
                 'placedBefore' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed before this instant.'),
                 'q' => new QueryParameter(schema: ['type' => 'string'], description: 'Search the order number, external reference, customer name and customer email.'),
+                'tag' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated tags; orders with any of them. Case does not matter.'),
+                'paymentStatus' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated payment statuses: unpaid, authorized, paid, refunded, partially_refunded.'),
                 'customer' => new QueryParameter(schema: ['type' => 'string', 'format' => 'uuid'], description: 'Only orders linked to this customer record.'),
                 'sort' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated fields, "-" for descending: placedAt, number, total, customerName, status. Default -placedAt.'),
             ],
@@ -72,6 +76,46 @@ use Symfony\Component\Serializer\Attribute\Groups;
             normalizationContext: ['groups' => ['order:list', 'order:detail']],
             description: 'Move the order through its state machine. Send the version you last saw: 409 if the order changed since, or if the transition is not allowed from its status.',
         ),
+        new Post(
+            uriTemplate: '/orders/{id}/notes',
+            status: 200,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: NoteInput::class,
+            read: false,
+            processor: AnnotateOrderProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Add a note, in any status. It appears in the timeline as a `note` event with who wrote it and when. Needs no version, and does not change it.',
+        ),
+        new Post(
+            uriTemplate: '/orders/{id}/tags',
+            status: 200,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: TagChangeInput::class,
+            read: false,
+            processor: AnnotateOrderProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Add and remove tags (at most 20 per order). Needs no version, and does not change it: adding and removing by name cannot undo someone else\'s change.',
+        ),
+        new Post(
+            uriTemplate: '/orders/bulk-tags',
+            status: 204,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: BulkTagChangeInput::class,
+            output: false,
+            read: false,
+            processor: AnnotateOrderProcessor::class,
+            description: 'Add and remove tags on up to 500 orders at once, all or none: an unknown order, or one that would pass 20 tags, changes nothing.',
+        ),
+        new Post(
+            uriTemplate: '/orders/{id}/payment-status',
+            status: 200,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: PaymentStatusInput::class,
+            read: false,
+            processor: AnnotateOrderProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Set the payment status by hand. Send the version you last saw: 409 if the order changed since. Only the status is kept, never card data.',
+        ),
     ],
     security: "is_granted('ROLE_VIEWER')",
 )]
@@ -102,6 +146,15 @@ final class OrderResource
 
     #[Groups(['order:list'])]
     public string $currency = '';
+
+    #[ApiProperty(schema: Schemas::PAYMENT_STATUS)]
+    #[Groups(['order:list'])]
+    public string $paymentStatus = 'unpaid';
+
+    /** @var list<string> alphabetical */
+    #[ApiProperty(schema: ['type' => 'array', 'items' => ['type' => 'string']])]
+    #[Groups(['order:list'])]
+    public array $tags = [];
 
     /**
      * Where the order's stock is reserved and shipped from.

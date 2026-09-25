@@ -11,7 +11,7 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * The audit trail of an order: who, what, when, and the state before and
- * after. Only Order creates these, in the same flush (so the same
+ * after. A note is an event too: its text is in `after`. Only Order creates these, in the same flush (so the same
  * transaction) as the change they record. Never updated or deleted.
  */
 #[ORM\Entity]
@@ -21,6 +21,9 @@ class OrderEvent
     public const string CREATED = 'created';
     public const string TRANSITION = 'transition';
     public const string SHIPMENT = 'shipment';
+    public const string NOTE = 'note';
+    public const string TAGS_CHANGED = 'tags_changed';
+    public const string PAYMENT_STATUS_CHANGED = 'payment_status_changed';
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME)]

@@ -14,6 +14,7 @@ use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderCustomer;
 use Kanso\Core\Internal\Domain\Order\OrderEvent;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
+use Kanso\Core\Internal\Domain\Order\PaymentStatus;
 use Kanso\Core\Internal\Domain\Order\Transition;
 use Kanso\Core\Internal\Domain\Order\TransitionNotAllowed;
 use PHPUnit\Framework\TestCase;
@@ -91,7 +92,7 @@ final class OrderTest extends TestCase
 
         self::assertSame(OrderEvent::CREATED, $event->type());
         self::assertNull($event->before());
-        self::assertSame(['status' => 'pending', 'heldFrom' => null, 'channel' => 'manual', 'currency' => 'SEK', 'total' => 69_650, 'lines' => 2], $event->after());
+        self::assertSame(['status' => 'pending', 'heldFrom' => null, 'paymentStatus' => 'unpaid', 'channel' => 'manual', 'currency' => 'SEK', 'total' => 69_650, 'lines' => 2], $event->after());
         self::assertSame('Ops', $event->actor()->name);
     }
 
@@ -157,5 +158,89 @@ final class OrderTest extends TestCase
         self::assertSame(OrderStatus::Delivered, $order->status());
         self::assertSame([], $order->availableTransitions());
         self::assertCount(7, $order->events());
+    }
+
+    public function testANoteIsAnEventInAnyStatusAndLeavesTheOrderAlone(): void
+    {
+        $order = $this->order();
+        $order->apply(Transition::Cancel, $this->actor, $this->now);
+        $later = $this->now->modify('+1 hour');
+
+        $note = $order->addNote("  Customer called: leave at the door.\n", new Actor('user-2', 'Siv'), $later);
+
+        self::assertSame(OrderEvent::NOTE, $note->type());
+        self::assertSame(['note' => 'Customer called: leave at the door.'], $note->after());
+        self::assertNull($note->before());
+        self::assertSame('Siv', $note->actor()->name);
+        self::assertEquals($later, $note->occurredAt());
+        self::assertEquals($this->now, $order->updatedAt(), 'a note is not a change to the order');
+        self::assertSame(OrderStatus::Cancelled, $order->status());
+    }
+
+    public function testAnEmptyOrOverlongNoteIsRefused(): void
+    {
+        $order = $this->order();
+
+        foreach (['   ', str_repeat('x', Order::MAX_NOTE_LENGTH + 1)] as $text) {
+            try {
+                $order->addNote($text, $this->actor, $this->now);
+                self::fail('Expected a refusal.');
+            } catch (\InvalidArgumentException) {
+            }
+        }
+        self::assertCount(1, $order->events());
+    }
+
+    public function testTagsAreAddedAndRemovedIgnoringCase(): void
+    {
+        $order = $this->order();
+
+        $added = $order->changeTags(['VIP', ' gift  wrap ', 'vip'], [], $this->actor, $this->now);
+        self::assertSame(['gift wrap', 'VIP'], $order->tags());
+        self::assertNotNull($added);
+        self::assertSame(OrderEvent::TAGS_CHANGED, $added->type());
+        self::assertSame(['tags' => []], $added->before());
+        self::assertSame(['tags' => ['gift wrap', 'VIP']], $added->after());
+
+        self::assertNull($order->changeTags(['vip'], ['not-there'], $this->actor, $this->now), 'no change, no event');
+
+        $order->changeTags(['Rush'], ['Gift Wrap'], $this->actor, $this->now);
+        self::assertSame(['Rush', 'VIP'], $order->tags());
+        self::assertTrue($order->hasTag('rush'));
+        self::assertCount(3, $order->events());
+    }
+
+    public function testATagHasNoCommaAndAnOrderAtMostTwentyTags(): void
+    {
+        $order = $this->order();
+
+        try {
+            $order->changeTags(['a,b'], [], $this->actor, $this->now);
+            self::fail('Expected a refusal.');
+        } catch (\InvalidArgumentException) {
+        }
+
+        $this->expectException(\DomainException::class);
+        $order->changeTags(array_map(static fn (int $n): string => 'tag-'.$n, range(1, Order::MAX_TAGS + 1)), [], $this->actor, $this->now);
+    }
+
+    public function testThePaymentStatusChangesByHandAndRecordsBeforeAndAfter(): void
+    {
+        $order = $this->order();
+        self::assertSame(PaymentStatus::Unpaid, $order->paymentStatus());
+        $later = $this->now->modify('+1 day');
+
+        $event = $order->changePaymentStatus(PaymentStatus::Paid, $this->actor, $later);
+
+        self::assertNotNull($event);
+        self::assertSame(OrderEvent::PAYMENT_STATUS_CHANGED, $event->type());
+        self::assertSame(['paymentStatus' => 'unpaid'], $event->before());
+        self::assertSame(['paymentStatus' => 'paid'], $event->after());
+        self::assertSame(PaymentStatus::Paid, $order->paymentStatus());
+        self::assertEquals($later, $order->updatedAt());
+
+        self::assertNull($order->changePaymentStatus(PaymentStatus::Paid, $this->actor, $later), 'the same status is no change');
+        self::assertNotNull($order->changePaymentStatus(PaymentStatus::PartiallyRefunded, $this->actor, $later), 'any status may follow any other');
+        self::assertCount(3, $order->events());
     }
 }

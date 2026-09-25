@@ -22,6 +22,8 @@ final class OrderPresenter
         $resource->heldFrom = $order->heldFrom()?->value;
         $resource->channel = ['code' => $order->channel()->code(), 'name' => $order->channel()->name()];
         $resource->currency = $order->currency();
+        $resource->paymentStatus = $order->paymentStatus()->value;
+        $resource->tags = $order->tags();
         $resource->total = $order->total()->amount;
         $resource->customer = [
             'id' => null === $order->customerId() ? null : (string) $order->customerId(),

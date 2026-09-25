@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kanso\Core\Internal\Infrastructure\Doctrine\Repository;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -13,6 +14,8 @@ use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderQuery;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
+use Kanso\Core\Internal\Domain\Order\OrderTag;
+use Kanso\Core\Internal\Domain\Order\PaymentStatus;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
@@ -36,12 +39,42 @@ final class OrderRepository implements OrderStoreInterface
         return Uuid::isValid($id) ? $this->em->find(Order::class, Uuid::fromString($id)) : null;
     }
 
+    public function findByIds(array $ids): array
+    {
+        $uuids = array_map(static fn (string $id): string => Uuid::fromString($id)->toBinary(), array_values(array_filter($ids, Uuid::isValid(...))));
+        if ([] === $uuids) {
+            return [];
+        }
+
+        /** @var list<Order> $orders */
+        $orders = $this->em->createQueryBuilder()
+            ->select('o', 't')
+            ->from(Order::class, 'o')
+            ->leftJoin('o.tags', 't')
+            ->where('o.id IN (:ids)')
+            ->setParameter('ids', $uuids, ArrayParameterType::BINARY)
+            ->getQuery()
+            ->getResult();
+
+        return $orders;
+    }
+
+    public function tagCounts(): array
+    {
+        /** @var list<array{name: string, orders: int|string}> $rows */
+        $rows = $this->em->getConnection()->fetchAllAssociative('SELECT MIN(name) AS name, COUNT(*) AS orders FROM order_tag GROUP BY name ORDER BY name');
+
+        return array_map(static fn (array $row): array => ['name' => $row['name'], 'orders' => (int) $row['orders']], $rows);
+    }
+
     public function search(OrderQuery $query): Page
     {
+        // The tags are fetched with the page, so the list costs one query, not one per row.
         $builder = $this->em->createQueryBuilder()
-            ->select('o', 'c')
+            ->select('o', 'c', 't')
             ->from(Order::class, 'o')
-            ->join('o.channel', 'c');
+            ->join('o.channel', 'c')
+            ->leftJoin('o.tags', 't');
 
         $this->filter($builder, $query);
 
@@ -52,7 +85,7 @@ final class OrderRepository implements OrderStoreInterface
         $builder->addOrderBy('o.id', 'DESC');
 
         $builder->setFirstResult($query->offset)->setMaxResults($query->limit);
-        $paginator = new Paginator($builder->getQuery(), fetchJoinCollection: false);
+        $paginator = new Paginator($builder->getQuery(), fetchJoinCollection: true);
 
         /** @var list<Order> $orders */
         $orders = iterator_to_array($paginator->getIterator(), false);
@@ -68,6 +101,15 @@ final class OrderRepository implements OrderStoreInterface
         }
         if (null !== $query->customerId) {
             $builder->andWhere('o.customerId = :customer')->setParameter('customer', Uuid::fromString($query->customerId), UuidType::NAME);
+        }
+        if ([] !== $query->paymentStatuses) {
+            $builder->andWhere('o.paymentStatus IN (:paymentStatuses)')
+                ->setParameter('paymentStatuses', array_map(static fn (PaymentStatus $status): string => $status->value, $query->paymentStatuses));
+        }
+        if ([] !== $query->tags) {
+            // A subquery, not the fetch join: filtering that would load only the matching tags.
+            $builder->andWhere(\sprintf('EXISTS (SELECT 1 FROM %s ft WHERE ft.order = o AND ft.name IN (:tags))', OrderTag::class))
+                ->setParameter('tags', $query->tags);
         }
         if ([] !== $query->channels) {
             $builder->andWhere('c.code IN (:channels)')->setParameter('channels', $query->channels);

@@ -11,8 +11,10 @@ final readonly class OrderQuery
 
     /**
      * @param list<OrderStatus>                      $statuses
-     * @param list<string>                           $channels channel codes
-     * @param list<array{field: string, desc: bool}> $sort     fields from SORTABLE
+     * @param list<string>                           $channels        channel codes
+     * @param list<string>                           $tags            orders with any of these tags
+     * @param list<PaymentStatus>                    $paymentStatuses
+     * @param list<array{field: string, desc: bool}> $sort            fields from SORTABLE
      */
     public function __construct(
         public array $statuses = [],
@@ -25,6 +27,8 @@ final readonly class OrderQuery
         public int $limit = 50,
         /** Only orders placed for this customer record (id). */
         public ?string $customerId = null,
+        public array $tags = [],
+        public array $paymentStatuses = [],
     ) {
     }
 }
