@@ -55,6 +55,28 @@ describe('the order import page', () => {
     expect(within(problems).getAllByText('WEB-1002')).toHaveLength(2);
   });
 
+  it('documents the payment status, tags and note columns and explains their problems', async () => {
+    api.mockResolvedValue({
+      ...preview,
+      errors: [
+        { row: 2, reference: 'WEB-1001', field: 'paymentStatus', code: 'unknown_payment_status', message: 'Unknown payment status "free".' },
+        { row: 3, reference: 'WEB-1002', field: 'tags', code: 'tag', message: '"a,b" is not a valid tag.' },
+        { row: 4, reference: 'WEB-1003', field: 'tags', code: 'too_many_tags', message: 'At most 20 tags.' },
+        { row: 5, reference: 'WEB-1004', field: 'note', code: 'too_long', message: 'Too long.' },
+      ],
+    });
+    renderAt('/orders/import');
+
+    expect(await screen.findByText(/tags \(several separated by \|/)).toBeTruthy();
+    await chooseFile();
+
+    const problems = await screen.findByRole('region', { name: 'Problems (4)' });
+    expect(within(problems).getByText(/Unknown payment status\. Use unpaid/)).toBeTruthy();
+    expect(within(problems).getByText('A tag is 1 to 64 characters without commas. Separate tags with |.')).toBeTruthy();
+    expect(within(problems).getByText('An order can have at most 20 tags.')).toBeTruthy();
+    expect(within(problems).getByText('The note is longer than 2000 characters.')).toBeTruthy();
+  });
+
   it('imports the orders the preview would create', async () => {
     api.mockResolvedValueOnce(preview).mockResolvedValueOnce({ ...preview, dryRun: false });
     renderAt('/orders/import');
