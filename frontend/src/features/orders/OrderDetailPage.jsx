@@ -6,6 +6,7 @@ import { Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitiv
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
 import { NoteForm, PaymentCard, TagsCard } from './OrderAnnotations.jsx';
+import { useOrderDetailShortcuts } from './orderShortcuts.js';
 import { PrintDocuments } from './PrintDocuments.jsx';
 import { ShipDialog } from './ShipDialog.jsx';
 import { StatusBadge, useCanOperate, useDateTime } from './shared.jsx';
@@ -46,6 +47,7 @@ function OrderDetail({ order }) {
   const { t, locale } = useI18n();
   const dateTime = useDateTime();
   const money = (minor) => formatMoney(minor, order.currency, locale);
+  useOrderDetailShortcuts();
 
   return (
     <div className="space-y-6">
@@ -189,6 +191,7 @@ function Transitions({ order }) {
               size="sm"
               variant={CONFIRM_FIRST.has(name) ? 'outline' : name === order.availableTransitions[0] ? 'default' : 'outline'}
               disabled={transition.isPending}
+              data-shortcut={name === order.availableTransitions[0] && !CONFIRM_FIRST.has(name) ? 'advance' : undefined}
               onClick={() => (CONFIRM_FIRST.has(name) ? setConfirming(name) : run(name))}
             >
               {t(`orderTransition.${name}`)}
@@ -286,7 +289,7 @@ function ShipAction({ order }) {
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button size="sm" data-shortcut="ship" onClick={() => setOpen(true)}>
         <Truck className="size-4" aria-hidden="true" />
         {t('ship.open')}
       </Button>

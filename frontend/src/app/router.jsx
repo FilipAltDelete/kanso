@@ -13,6 +13,7 @@ import { ProductImportPage } from '../features/inventory/ProductImportPage.jsx';
 import { ProductsPage } from '../features/inventory/ProductsPage.jsx';
 import { SettingsPage } from '../features/settings/SettingsPage.jsx';
 import { useI18n } from '../lib/i18n.jsx';
+import { ShortcutsProvider } from '../lib/ShortcutsProvider.jsx';
 import { Layout } from './Layout.jsx';
 
 function NotFound() {
@@ -28,7 +29,16 @@ function NotFound() {
   );
 }
 
-const rootRoute = createRootRoute({ component: Layout, notFoundComponent: NotFound });
+// Keyboard shortcuts live inside the router: they navigate, and pages register their own.
+function Root() {
+  return (
+    <ShortcutsProvider>
+      <Layout />
+    </ShortcutsProvider>
+  );
+}
+
+const rootRoute = createRootRoute({ component: Root, notFoundComponent: NotFound });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: DashboardPage });
 

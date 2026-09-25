@@ -52,7 +52,7 @@ describe('the order list', () => {
     await screen.findByRole('link', { name: '10001' });
     expect(Object.fromEntries(lastListQuery())).toEqual({ page: '2', itemsPerPage: '25', sort: 'total', q: 'anna', status: 'on_hold', channel: 'manual' });
     expect(screen.getByText('26–26 of 120')).toBeTruthy();
-    expect(screen.getByLabelText('Status').value).toBe('on_hold');
+    expect(screen.getByRole('button', { name: 'Status On hold' }).getAttribute('aria-expanded')).toBe('false');
   });
 
   it('filters by status and date and keeps it in the URL', async () => {
@@ -60,12 +60,38 @@ describe('the order list', () => {
     const router = renderAt('/orders');
     await screen.findByRole('link', { name: '10001' });
 
-    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'shipped' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Status All' }));
+    const statuses = screen.getByRole('group', { name: 'Status' });
+    fireEvent.click(within(statuses).getByRole('checkbox', { name: 'Shipped' }));
     await waitFor(() => expect(lastListQuery().get('status')).toBe('shipped'));
+    fireEvent.click(within(statuses).getByRole('checkbox', { name: 'Pending' }));
+    await waitFor(() => expect(lastListQuery().get('status')).toBe('pending,shipped'));
+    expect(screen.getByRole('button', { name: 'Status Pending, Shipped' })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Placed from'), { target: { value: '2026-09-01' } });
     await waitFor(() => expect(lastListQuery().get('placedFrom')).toBe(new Date(2026, 8, 1).toISOString()));
-    expect(router.state.location.search).toMatchObject({ 'f.status': 'shipped', 'f.placedAt': '2026-09-01..' });
+    expect(router.state.location.search).toMatchObject({ 'f.status': 'pending,shipped', 'f.placedAt': '2026-09-01..' });
+  });
+
+  it('reads statuses and tags from older single-value links and the dashboard', async () => {
+    answer();
+    renderAt('/orders?f.status=confirmed,allocated,picking,packed&f.tags=VIP');
+
+    await screen.findByRole('link', { name: '10001' });
+    expect(lastListQuery().get('status')).toBe('confirmed,allocated,picking,packed');
+    expect(lastListQuery().get('tag')).toBe('VIP');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Status Awaiting fulfillment' }));
+    const statuses = screen.getByRole('group', { name: 'Status' });
+    expect(within(statuses).getByRole('button', { name: 'Awaiting fulfillment' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(statuses).getByRole('checkbox', { name: 'Picking' }).checked).toBe(true);
+    expect(within(statuses).getByRole('checkbox', { name: 'Pending' }).checked).toBe(false);
+
+    fireEvent.click(within(statuses).getByRole('button', { name: 'Clear' }));
+    await waitFor(() => expect(lastListQuery().has('status')).toBe(false));
+    // The tag from the link shows, and stays chosen, before the tag list has loaded.
+    fireEvent.click(screen.getByRole('button', { name: 'Tags VIP' }));
+    expect(within(screen.getByRole('group', { name: 'Tags' })).getByRole('checkbox', { name: 'VIP' }).checked).toBe(true);
   });
 
   it('filters by the day orders shipped without showing a column for it', async () => {
@@ -115,9 +141,16 @@ describe('the order list', () => {
     expect(within(row).getByText('VIP')).toBeTruthy();
     expect(within(row).getByText('gift wrap')).toBeTruthy();
 
-    await waitFor(() => expect(within(screen.getByLabelText('Taggar')).getByRole('option', { name: 'VIP' })).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('Taggar'), { target: { value: 'VIP' } });
-    await waitFor(() => expect(lastListQuery().get('tag')).toBe('VIP'));
+    fireEvent.click(screen.getByRole('button', { name: 'Taggar Alla' }));
+    const tags = screen.getByRole('group', { name: 'Taggar' });
+    fireEvent.click(await within(tags).findByRole('checkbox', { name: 'gift wrap' }));
+    await waitFor(() => expect(lastListQuery().get('tag')).toBe('gift wrap'));
+    fireEvent.click(within(tags).getByRole('checkbox', { name: 'VIP' }));
+    // Any of the tags, in the order the list shows them.
+    await waitFor(() => expect(lastListQuery().get('tag')).toBe('VIP,gift wrap'));
+    fireEvent.keyDown(within(tags).getByRole('checkbox', { name: 'VIP' }), { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Taggar' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Taggar VIP, gift wrap' }));
 
     fireEvent.change(screen.getByLabelText('Betalning'), { target: { value: 'refunded' } });
     await waitFor(() => expect(lastListQuery().get('paymentStatus')).toBe('refunded'));

@@ -3,6 +3,7 @@ import { RotateCcw, Search } from 'lucide-react';
 import { useI18n } from '../../../lib/i18n.jsx';
 import { Button, Input, Select } from '../primitives.jsx';
 import { columnLabel, formatDateRange, parseDateRange } from './columns.js';
+import { MultiFilter } from './MultiFilter.jsx';
 
 /** Typing settles for this long before the view (and the URL) follows. */
 const SEARCH_DELAY_MS = 250;
@@ -85,6 +86,7 @@ function ColumnFilter({ column }) {
   const { options, type } = column.columnDef.meta.filter;
 
   if (type === 'dateRange') return <DateRangeFilter column={column} />;
+  if (type === 'multi') return <MultiFilter column={column} />;
 
   return (
     <div className="flex flex-col gap-1">
