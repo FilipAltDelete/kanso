@@ -5,6 +5,7 @@ import { useOrder, useTransitionOrder } from '../../api/orders.js';
 import { Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
+import { PrintDocuments } from './PrintDocuments.jsx';
 import { StatusBadge, useCanOperate, useDateTime } from './shared.jsx';
 
 /** Transitions that end or pause the order ask once more before they run. */
@@ -59,6 +60,8 @@ function OrderDetail({ order }) {
       </div>
 
       <Transitions order={order} />
+
+      <PrintDocuments order={order} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4">

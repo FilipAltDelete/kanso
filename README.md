@@ -52,6 +52,7 @@ make logs / down / reset
   (the key is printed once; only its hash is stored) and revoke it with `kanso:api-key:revoke <id>`.
   A key has one role — Operator or Viewer, never Admin — and 3,000 requests a minute.
 - `GET /health/live`, `GET /health/ready`
+- `POST /api/orders/{id}/documents` (`{"type": "pick_list" | "packing_slip", "locale": "sv" | "en"}`) queues a PDF; poll `GET /api/documents/{id}` until `status` is `done`, then open its `downloadUrl` (signed, five minutes). Needs a running worker (`docs/adr/0005`).
 - `GET /api/docs.json` — OpenAPI document (authenticated)
 
 Errors are RFC 7807 problem responses (`application/problem+json`).

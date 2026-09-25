@@ -72,6 +72,8 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Order REST API: create, list (status, channel, date range, search, sort, paging), detail with timeline, `POST /orders/{id}/transitions`
 - [x] Order UI: list with filters and saved view in the URL, detail with lines, addresses, actions and history, create-order form
 - [ ] Stock reservation on confirm (needs order lines linked to products); CSV order import; editing orders, partial cancel, notes and tags; payment status
+- [x] Pick lists and packing slips as PDFs (Swedish or English): Twig + dompdf in a worker, stored in S3/MinIO, downloaded through a five-minute signed link; "Print" on the order page (`docs/adr/0005`)
+- [ ] Marking orders shipped with a tracking number; partial shipments
 
 ---
 

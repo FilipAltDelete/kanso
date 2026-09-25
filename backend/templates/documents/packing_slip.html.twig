@@ -1,0 +1,61 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ labels.packing_slip }}{% endblock %}
+
+{% block body %}
+    <h1>{{ labels.packing_slip }}</h1>
+
+    <table class="meta">
+        <tr>
+            <td>
+                <dl>
+                    <dt>{{ labels.ship_to }}</dt>
+                    <dd class="address">{% for line in shipTo %}{{ line }}<br>{% endfor %}</dd>
+                    {% if billTo %}
+                        <dt>{{ labels.bill_to }}</dt>
+                        <dd class="address">{% for line in billTo %}{{ line }}<br>{% endfor %}</dd>
+                    {% endif %}
+                </dl>
+            </td>
+            <td>
+                <dl>
+                    <dt>{{ labels.order }}</dt>
+                    <dd><strong>{{ order.number }}</strong></dd>
+                    <dt>{{ labels.placed }}</dt>
+                    <dd>{{ order.placedAt }}</dd>
+                    <dt>{{ labels.customer }}</dt>
+                    <dd>{{ order.customerName }}{% if order.customerEmail %}<br>{{ order.customerEmail }}{% endif %}</dd>
+                </dl>
+            </td>
+        </tr>
+    </table>
+
+    {# No prices: a packing slip lists what is in the parcel, and may travel with a gift. #}
+    <table class="lines">
+        <thead>
+            <tr>
+                <th>{{ labels.sku }}</th>
+                <th>{{ labels.product }}</th>
+                <th class="num">{{ labels.quantity }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in lines %}
+                <tr>
+                    <td class="sku">{{ line.sku }}</td>
+                    <td>{{ line.name }}</td>
+                    <td class="num">{{ line.quantity }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td></td>
+                <td>{{ labels.total_units }}</td>
+                <td class="num">{{ totalUnits }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <p style="margin-top: 10mm;">{{ labels.thanks }}</p>
+{% endblock %}

@@ -31,6 +31,7 @@ erDiagram
 | Reservation | Stock held for an order line | order_line, inventory_level, quantity |
 | Shipment | A parcel leaving a location | order, lines, carrier, tracking_number, shipped_at |
 | OrderEvent | Audit trail: creation and every state change | order, type (`created`, `transition`), transition, actor + actor name, before/after, occurred_at |
+| Document | A generated PDF for an order (pick list, packing slip) and the job that makes it | type, order, order_version, locale, status (queued/running/done/failed), storage_key, requested_by |
 | Return | Phase 3 | — |
 
 ## Order states

@@ -45,10 +45,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # phpunit.xml.dist forces the compose service name `mysql`; here it is on localhost.
+      # phpunit.xml.dist forces the compose service names `mysql` and `minio`; here they are on localhost.
       - name: Map service names
         working-directory: .
-        run: echo "127.0.0.1 mysql" | sudo tee -a /etc/hosts
+        run: echo "127.0.0.1 mysql minio" | sudo tee -a /etc/hosts
+
+      # MinIO needs `server /data` as its command, which a service container
+      # cannot override, so it runs as a step (as in Pimsen). Images from
+      # quay.io: Docker Hub no longer serves minio/minio to anonymous pulls.
+      - name: Object storage
+        working-directory: .
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=kanso -e MINIO_ROOT_PASSWORD=kanso-secret \
+            quay.io/minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            curl -fsS http://minio:9000/minio/health/live > /dev/null && break
+            sleep 2
+          done
+          docker run --rm --network host quay.io/minio/mc:latest /bin/sh -c \
+            "mc alias set local http://127.0.0.1:9000 kanso kanso-secret && mc mb --ignore-existing local/kanso-test"
 
       - uses: shivammathur/setup-php@v2
         with:

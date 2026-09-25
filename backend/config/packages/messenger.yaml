@@ -33,7 +33,8 @@ framework:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
                 options: { queue_name: failed, auto_setup: false }
 
-        routing: {}
+        routing:
+            Kanso\Core\Internal\Application\Document\GenerateDocument: async
 
         buses:
             messenger.bus.default:

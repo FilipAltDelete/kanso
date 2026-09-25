@@ -1,0 +1,66 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ labels.pick_list }}{% endblock %}
+
+{% block body %}
+    <h1>{{ labels.pick_list }}</h1>
+
+    <table class="meta">
+        <tr>
+            <td>
+                <dl>
+                    <dt>{{ labels.order }}</dt>
+                    <dd><strong>{{ order.number }}</strong></dd>
+                    <dt>{{ labels.placed }}</dt>
+                    <dd>{{ order.placedAt }}</dd>
+                    <dt>{{ labels.channel }}</dt>
+                    <dd>{{ order.channel }}</dd>
+                </dl>
+            </td>
+            <td>
+                <dl>
+                    <dt>{{ labels.ship_to }}</dt>
+                    <dd class="address">{% for line in shipTo %}{{ line }}<br>{% endfor %}</dd>
+                </dl>
+            </td>
+        </tr>
+    </table>
+
+    <table class="lines">
+        <thead>
+            <tr>
+                <th class="num">{{ labels.position }}</th>
+                <th>{{ labels.sku }}</th>
+                <th>{{ labels.product }}</th>
+                <th class="num">{{ labels.quantity }}</th>
+                <th class="num">{{ labels.picked }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in lines %}
+                <tr>
+                    <td class="num">{{ line.position }}</td>
+                    <td class="sku">{{ line.sku }}</td>
+                    <td>{{ line.name }}</td>
+                    <td class="num"><strong>{{ line.quantity }}</strong></td>
+                    <td class="num"><span class="box"></span></td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td></td>
+                <td colspan="2">{{ labels.total_units }} ({{ lines|length }} {{ labels.lines|lower }})</td>
+                <td class="num">{{ totalUnits }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <table class="sign">
+        <tr>
+            <td><div class="line"></div><div class="caption">{{ labels.picked_by }}</div></td>
+            <td><div class="line"></div><div class="caption">{{ labels.checked_by }}</div></td>
+        </tr>
+    </table>
+{% endblock %}
