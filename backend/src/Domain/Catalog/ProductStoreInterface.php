@@ -31,4 +31,16 @@ interface ProductStoreInterface
     public function search(PageRequest $request): Page;
 
     public function add(Product $product): void;
+
+    public function findEventById(string $id): ?ProductEvent;
+
+    /** Stages an audit event; it is written when the surrounding transaction commits. */
+    public function addEvent(ProductEvent $event): void;
+
+    /**
+     * A product's history, newest first. The `product` filter (an id) is required.
+     *
+     * @return Page<ProductEvent>
+     */
+    public function events(PageRequest $request): Page;
 }

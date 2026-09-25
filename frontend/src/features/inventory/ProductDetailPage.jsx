@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatChange, formatQuantity, formatWeight } from '../../lib/quantity.js';
 import { AdjustStockDialog } from './AdjustStockDialog.jsx';
+import { ProductChanges } from './ProductChanges.jsx';
 import { ProductFormDialog } from './ProductFormDialog.jsx';
 import { stockPerLocation } from './stockRows.js';
 
@@ -207,6 +208,8 @@ export function ProductDetailPage() {
           emptyMessage={t('productDetail.noHistory')}
         />
       </section>
+
+      <ProductChanges productId={p.id} />
 
       {editing ? <ProductFormDialog product={p} onClose={() => setEditing(false)} /> : null}
 

@@ -151,11 +151,15 @@ export function useAdjustStock(productId) {
   });
 }
 
-/** The catalog changed: every product and location list refetches. */
+/** The catalog changed: every product and location list refetches, and a changed product's history. */
 function useCatalogRefresh(key) {
   const queryClient = useQueryClient();
 
-  return () => queryClient.invalidateQueries({ queryKey: [key] });
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [key] }),
+      ...(key === 'products' ? [queryClient.invalidateQueries({ queryKey: ['productEvents'] })] : []),
+    ]);
 }
 
 export function useCreateProduct() {
@@ -228,4 +232,23 @@ export function useImportProducts() {
       if (!result.dryRun) refresh();
     },
   });
+}
+
+const fieldValue = z.union([z.string(), z.number(), z.null()]);
+
+export const productEventSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  type: z.enum(['created', 'updated']),
+  source: z.string(),
+  actorId: z.string(),
+  actorName: z.string(),
+  before: z.record(z.string(), fieldValue).nullable(),
+  after: z.record(z.string(), fieldValue),
+  occurredAt: z.string(),
+});
+
+/** A product's history of creates and changes (ADR-0013), newest first. */
+export function useProductEvents(productId, view) {
+  return usePage('productEvents', '/api/product-events', productEventSchema, view, { product: productId });
 }

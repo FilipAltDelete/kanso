@@ -6,9 +6,11 @@ namespace Kanso\Core\Internal\Infrastructure\Doctrine\Repository;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Kanso\Core\Internal\Domain\Catalog\Product;
+use Kanso\Core\Internal\Domain\Catalog\ProductEvent;
 use Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface;
 use Kanso\Core\Internal\Domain\Common\Page;
 use Kanso\Core\Internal\Domain\Common\PageRequest;
+use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
 final class ProductRepository implements ProductStoreInterface
@@ -75,5 +77,40 @@ final class ProductRepository implements ProductStoreInterface
     public function add(Product $product): void
     {
         $this->em->persist($product);
+    }
+
+    public function findEventById(string $id): ?ProductEvent
+    {
+        return Uuid::isValid($id) ? $this->em->find(ProductEvent::class, Uuid::fromString($id)) : null;
+    }
+
+    public function addEvent(ProductEvent $event): void
+    {
+        $this->em->persist($event);
+    }
+
+    public function events(PageRequest $request): Page
+    {
+        $product = $request->filters['product'] ?? '';
+        if (!Uuid::isValid($product)) {
+            return new Page([], 0);
+        }
+
+        $qb = $this->em->createQueryBuilder()->select('e')->from(ProductEvent::class, 'e')
+            ->where('IDENTITY(e.product) = :product')
+            ->setParameter('product', Uuid::fromString($product), UuidType::NAME);
+
+        $total = (int) (clone $qb)->select('COUNT(e.id)')->getQuery()->getSingleScalarResult();
+
+        /** @var list<ProductEvent> $items */
+        $items = $qb->orderBy('e.occurredAt', 'desc')
+            // Ids are UUIDv7, so within one second they still sort by creation.
+            ->addOrderBy('e.id', 'desc')
+            ->setFirstResult($request->offset)
+            ->setMaxResults($request->limit)
+            ->getQuery()
+            ->getResult();
+
+        return new Page($items, $total);
     }
 }

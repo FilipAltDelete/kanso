@@ -7,7 +7,9 @@ namespace Kanso\Core\Internal\Application\Catalog;
 use Kanso\Core\Internal\Application\Exception\Conflict;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
 use Kanso\Core\Internal\Domain\Catalog\Product;
+use Kanso\Core\Internal\Domain\Catalog\ProductEvent;
 use Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface;
+use Kanso\Core\Internal\Domain\Common\Actor;
 use Kanso\Core\Internal\Domain\Common\ConcurrentModification;
 use Kanso\Core\Internal\Domain\Common\TransactionInterface;
 use Kanso\Core\Internal\Domain\Inventory\Address;
@@ -30,7 +32,11 @@ final class CatalogService
     ) {
     }
 
-    public function createProduct(string $sku, string $name, ?string $barcode, ?int $weightGrams): Product
+    /**
+     * `$actor` is who the history names; code that runs without a person
+     * (tests, console commands) leaves it out and is recorded as the system.
+     */
+    public function createProduct(string $sku, string $name, ?string $barcode, ?int $weightGrams, ?Actor $actor = null): Product
     {
         $sku = trim($sku);
         $violations = [
@@ -42,21 +48,29 @@ final class CatalogService
         }
         self::throwIfAny($violations);
 
-        return $this->write(function () use ($sku, $name, $barcode, $weightGrams): Product {
-            $product = new Product($sku, trim($name), self::blankToNull($barcode), $weightGrams, $this->clock->now());
+        return $this->write(function () use ($sku, $name, $barcode, $weightGrams, $actor): Product {
+            $now = $this->clock->now();
+            $product = new Product($sku, trim($name), self::blankToNull($barcode), $weightGrams, $now);
             $this->products->add($product);
+            $this->products->addEvent(ProductEvent::created($product, ProductEvent::SOURCE_API, $actor ?? self::system(), $now));
 
             return $product;
         });
     }
 
-    public function updateProduct(Product $product, int $expectedVersion, string $name, ?string $barcode, ?int $weightGrams): Product
+    public function updateProduct(Product $product, int $expectedVersion, string $name, ?string $barcode, ?int $weightGrams, ?Actor $actor = null): Product
     {
         self::throwIfAny(ProductRules::fields($name, $barcode, $weightGrams));
         self::assertVersion('product', $product->version(), $expectedVersion);
 
-        return $this->write(function () use ($product, $name, $barcode, $weightGrams): Product {
-            $product->update(trim($name), self::blankToNull($barcode), $weightGrams, $this->clock->now());
+        return $this->write(function () use ($product, $name, $barcode, $weightGrams, $actor): Product {
+            $now = $this->clock->now();
+            $before = ProductEvent::state($product);
+            $product->update(trim($name), self::blankToNull($barcode), $weightGrams, $now);
+            $event = ProductEvent::updated($product, $before, ProductEvent::SOURCE_API, $actor ?? self::system(), $now);
+            if (null !== $event) {
+                $this->products->addEvent($event);
+            }
 
             return $product;
         });
@@ -136,6 +150,12 @@ final class CatalogService
             self::blankToNull($address->city),
             null === $country ? null : strtoupper($country),
         );
+    }
+
+    /** Who a change is recorded as when no person made it. */
+    public static function system(): Actor
+    {
+        return new Actor('system', 'System');
     }
 
     private static function assertVersion(string $what, int $current, int $expected): void

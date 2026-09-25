@@ -51,7 +51,7 @@ services:
             - '../src/Application/Exception/'
             # Entities and values, not services.
             - '../src/Domain/Common/{Actor,Page,PageRequest,ConcurrentModification}.php'
-            - '../src/Domain/Catalog/Product.php'
+            - '../src/Domain/Catalog/{Product,ProductEvent}.php'
             - '../src/Domain/Inventory/{Address,Location,InventoryLevel,InventoryMovement,StockChange,StockRuleViolated,AdjustmentReason,MovementType}.php'
             - '../src/Api/Resource/'
 

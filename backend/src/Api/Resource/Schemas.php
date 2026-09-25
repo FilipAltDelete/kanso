@@ -113,6 +113,14 @@ final class Schemas
         ],
     ];
 
+    /** A product's fields as its history records them (ProductEvent::state()). */
+    public const array PRODUCT_STATE = [
+        'sku' => ['type' => 'string'],
+        'name' => ['type' => 'string'],
+        'barcode' => ['type' => ['string', 'null']],
+        'weightGrams' => ['type' => ['integer', 'null']],
+    ];
+
     public const array TAG = ['type' => 'string', 'minLength' => 1, 'maxLength' => 64, 'pattern' => '^[^,]+$'];
 
     public const array PAYMENT_STATUS = ['type' => 'string', 'enum' => ['unpaid', 'authorized', 'paid', 'refunded', 'partially_refunded']];
