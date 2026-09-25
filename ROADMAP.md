@@ -79,6 +79,9 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Shipments: ship some lines or part of a line, with carrier and tracking number typed in; each shipment takes its units off on hand and off the reservation in one transaction with the order's version; the order becomes shipped when the last unit does; "Ship" dialog and shipment list on the order page (`docs/adr/0009`)
 - [x] After a shipment: correct its carrier and tracking number, or void one recorded by mistake (units back on hand and reserved; a shipped order reopens where it shipped from); a packing slip per shipment; the shipped time in the Ship dialog (`docs/adr/0009`, amended)
 - [x] Dashboard with real numbers: orders today, awaiting fulfillment, shipped today (orders with a shipment that day, partial ones included), orders by status and stock-outs for the browser's calendar day, refreshed every 30 s, each linking to its list (`GET /api/dashboard`; the order list filters by ship date with `shippedFrom`/`shippedBefore`)
+- [x] Product audit trail: who created or changed a product, when, through the API or a CSV import, with the fields before and after; unchanged edits record nothing; "Product changes" on the product page (`GET /api/product-events`, `docs/adr/0013`)
+- [x] Import history: every product and order import run for real, with who, when, the file name, its counts and its failed rows; "Recent imports" on both import pages (`GET /api/import-runs`, `docs/adr/0014`)
+- [x] Bulk status changes on the order list (confirm, hold, release, cancel and the rest): each order moves on its own, and the ones that cannot are listed with the reason; a bulk cancel asks first (`POST /api/orders/bulk-transitions`, `docs/adr/0015`)
 
 ---
 
