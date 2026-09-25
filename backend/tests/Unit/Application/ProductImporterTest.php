@@ -36,6 +36,10 @@ final class ProductImporterTest extends TestCase
 
                 return $work();
             }
+
+            public function forget(): void
+            {
+            }
         };
         $this->importer = new ProductImporter($this->products, $transaction, new MockClock('2026-09-25 10:00:00', 'UTC'));
     }

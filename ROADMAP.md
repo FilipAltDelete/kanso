@@ -26,7 +26,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Stack, deployment model and auth as Pimsen (`docs/adr/0001`, `0002`)
 - [x] Docker images (api, worker, web), Compose stack, Makefile, hand-written migrations, dev admin seeding
 - [x] JWT login with rotating refresh cookie, login rate limiting, roles (Admin, Operator, Viewer)
-- [x] API keys for integrations: hashed, one role, optional expiry, per-key rate limit (console commands; REST management endpoints not yet)
+- [x] API keys for integrations: hashed, one role, optional expiry, per-key rate limit; admins list, create (key shown once) and revoke them under Settings or through `/api/api-keys`, or with the console commands
 - [x] UI shell: login, navigation, empty dashboard, Swedish/English
 - [x] CI: lint, static analysis, tests, image builds (GitHub Actions)
 - [x] Domain model draft (`docs/domain-model.md`)
@@ -81,6 +81,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Dashboard with real numbers: orders today, awaiting fulfillment, shipped today (orders with a shipment that day, partial ones included), orders by status and stock-outs for the browser's calendar day, refreshed every 30 s, each linking to its list (`GET /api/dashboard`; the order list filters by ship date with `shippedFrom`/`shippedBefore`)
 - [x] Product audit trail: who created or changed a product, when, through the API or a CSV import, with the fields before and after; unchanged edits record nothing; "Product changes" on the product page (`GET /api/product-events`, `docs/adr/0013`)
 - [x] Import history: every product and order import run for real, with who, when, the file name, its counts and its failed rows; "Recent imports" on both import pages (`GET /api/import-runs`, `docs/adr/0014`)
+- [x] Stock CSV import for the starting stock load and stocktakes: `sku`, `location` (code) and `quantity` (counted on hand); upload, preview, then import; each row a count adjustment (reason `count`) with its movement in its own transaction, locking its level; never below reserved; rows already equal are not written, so the same file twice changes nothing; in the import history; linked from the products and locations pages (`POST /api/stock-imports` with `dryRun`, `docs/adr/0016`)
 - [x] Bulk status changes on the order list (confirm, hold, release, cancel and the rest): each order moves on its own, and the ones that cannot are listed with the reason; a bulk cancel asks first (`POST /api/orders/bulk-transitions`, `docs/adr/0015`)
 
 ---

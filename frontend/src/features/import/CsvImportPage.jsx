@@ -27,9 +27,10 @@ const TONES = { slate: 'text-slate-900', green: 'text-green-800', red: 'text-red
  * - `runLabel(count)`, `format` (lines describing the file), `template` ({ filename, rows })
  * - `errorColumns`: extra columns for the problem table, after the row number
  * - `problem(error)`: a row error in the UI's language
- * - `history`: `products` or `orders`, to list the past imports of that kind below (ADR-0014)
+ * - `notAllowed`: what a viewer is told; the product import's message when left out
+ * - `history`: `products`, `orders` or `stock`, to list the past imports of that kind below (ADR-0014)
  */
-export function CsvImportPage({ title, subtitle, back, done: doneLink, canImport, preview, run, counts, changes, runLabel, format, template, errorColumns, problem, history }) {
+export function CsvImportPage({ title, subtitle, back, done: doneLink, canImport, notAllowed, preview, run, counts, changes, runLabel, format, template, errorColumns, problem, history }) {
   const { t, locale } = useI18n();
   const inputRef = useRef(null);
   const inputId = useId();
@@ -87,7 +88,7 @@ export function CsvImportPage({ title, subtitle, back, done: doneLink, canImport
         <p className="text-sm text-slate-500">{subtitle}</p>
       </div>
 
-      {canImport ? null : <ErrorNotice error={{ message: t('import.notAllowed') }} />}
+      {canImport ? null : <ErrorNotice error={{ message: notAllowed ?? t('import.notAllowed') }} />}
 
       <Card className="space-y-3 p-4">
         <h2 className="text-sm font-semibold">{t('import.formatTitle')}</h2>

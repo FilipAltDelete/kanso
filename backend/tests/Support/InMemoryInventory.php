@@ -59,6 +59,11 @@ final class InMemoryInventory implements InventoryStoreInterface, TransactionInt
         }
     }
 
+    /** Nothing is cached in memory beyond the arrays themselves. */
+    public function forget(): void
+    {
+    }
+
     public function findLevel(Product $product, Location $location): ?InventoryLevel
     {
         foreach ($this->levels as $level) {
@@ -89,6 +94,19 @@ final class InMemoryInventory implements InventoryStoreInterface, TransactionInt
     public function totals(array $productIds): array
     {
         return [];
+    }
+
+    public function quantities(array $productIds): array
+    {
+        $quantities = [];
+        foreach ($this->levels as $level) {
+            $product = $level->product()->id()->toRfc4122();
+            if (\in_array($product, $productIds, true)) {
+                $quantities[$product][$level->location()->id()->toRfc4122()] = ['onHand' => $level->onHand(), 'reserved' => $level->reserved()];
+            }
+        }
+
+        return $quantities;
     }
 
     public function findMovementById(string $id): ?InventoryMovement

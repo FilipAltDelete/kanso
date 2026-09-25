@@ -6,6 +6,7 @@ const errorSchema = z.object({
   row: z.number().int(),
   sku: z.string().nullish(),
   reference: z.string().nullish(),
+  location: z.string().nullish(),
   field: z.string(),
   code: z.string(),
   message: z.string(),
@@ -13,7 +14,7 @@ const errorSchema = z.object({
 
 export const importRunSchema = z.object({
   id: z.string(),
-  type: z.enum(['products', 'orders']),
+  type: z.enum(['products', 'orders', 'stock']),
   filename: z.string().nullable(),
   actorId: z.string(),
   actorName: z.string(),

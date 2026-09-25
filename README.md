@@ -49,7 +49,8 @@ make logs / down / reset
 - `POST /api/auth/login` → access token (15 min) in the body, refresh token as an HttpOnly cookie
 - `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
 - Integrations authenticate with an API key instead: `X-Api-Key: kso_…` or `Authorization: Bearer kso_…`.
-  Create one with `php bin/console kanso:api-key:create "Shopify sync" --role=ROLE_OPERATOR [--expires="+90 days"] [--created-by=admin@example.com]`
+  An admin creates and revokes keys under Settings → API keys (`/api/api-keys` in the API), or from the console:
+  `php bin/console kanso:api-key:create "Shopify sync" --role=ROLE_OPERATOR [--expires="+90 days"] [--created-by=admin@example.com]`
   (the key is printed once; only its hash is stored) and revoke it with `kanso:api-key:revoke <id>`.
   A key has one role — Operator or Viewer, never Admin — and 3,000 requests a minute.
 - `GET /health/live`, `GET /health/ready`

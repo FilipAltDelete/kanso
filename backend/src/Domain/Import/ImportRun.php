@@ -22,7 +22,8 @@ class ImportRun
 {
     public const string PRODUCTS = 'products';
     public const string ORDERS = 'orders';
-    public const array TYPES = [self::PRODUCTS, self::ORDERS];
+    public const string STOCK = 'stock';
+    public const array TYPES = [self::PRODUCTS, self::ORDERS, self::STOCK];
 
     /** Rows kept per run; a file with more problems than this is fixed from the first ones anyway. */
     public const int MAX_ERRORS = 1000;
@@ -43,7 +44,7 @@ class ImportRun
     #[ORM\Column(name: 'actor_name', length: 255)]
     private string $actorName;
 
-    /** @var array<string, int> the import's own counts: rows, created, updated, unchanged, existing, failed… */
+    /** @var array<string, int> the import's own counts: rows, created, updated, unchanged, existing, changed, failed… */
     #[ORM\Column(type: 'json')]
     private array $counts;
 

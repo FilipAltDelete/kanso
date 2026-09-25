@@ -6,6 +6,8 @@ namespace Kanso\Core\Tests\Unit\Application;
 
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
 use Kanso\Core\Internal\Application\Security\ApiKeyService;
+use Kanso\Core\Internal\Domain\Common\Page;
+use Kanso\Core\Internal\Domain\Common\PageRequest;
 use Kanso\Core\Internal\Domain\Security\ApiKey;
 use Kanso\Core\Internal\Domain\Security\ApiKeyStoreInterface;
 use Kanso\Core\Internal\Domain\User\Role;
@@ -45,6 +47,11 @@ final class ApiKeyServiceTest extends TestCase
                 }
 
                 return null;
+            }
+
+            public function search(PageRequest $request): Page
+            {
+                return new Page(array_values($this->byId), \count($this->byId));
             }
 
             public function save(ApiKey $key): void
@@ -117,6 +124,31 @@ final class ApiKeyServiceTest extends TestCase
     public function testANameIsRequired(): void
     {
         $this->assertViolation('required', fn () => $this->service->create('  ', Role::VIEWER));
+    }
+
+    public function testANameFitsItsColumn(): void
+    {
+        $this->assertViolation('too_long', fn () => $this->service->create(str_repeat('å', 129), Role::VIEWER));
+        self::assertSame(str_repeat('å', 128), $this->service->create(str_repeat('å', 128), Role::VIEWER)['key']->name());
+    }
+
+    public function testARequestBodyIsCheckedAsSent(): void
+    {
+        try {
+            $this->service->createFromRequest(['name' => 42, 'role' => ['x'], 'expiresAt' => 'tomorrow'], (string) $this->admin->id());
+            self::fail('Expected a validation failure.');
+        } catch (ValidationFailed $e) {
+            self::assertSame(
+                [['name', 'type'], ['role', 'type'], ['expiresAt', 'date_time']],
+                array_map(static fn (array $v): array => [$v['path'], $v['code']], $e->violations()),
+            );
+        }
+
+        $this->assertViolation('required', fn () => $this->service->createFromRequest(['name' => 'ERP'], (string) $this->admin->id()));
+
+        $key = $this->service->createFromRequest(['name' => 'ERP', 'role' => Role::VIEWER, 'expiresAt' => '2027-01-01T00:00:00+01:00'], (string) $this->admin->id())['key'];
+        self::assertEquals(new \DateTimeImmutable('2026-12-31 23:00:00 UTC'), $key->expiresAt());
+        self::assertEquals($this->admin->id(), $key->createdBy());
     }
 
     public function testTheExpiryMustBeInTheFuture(): void

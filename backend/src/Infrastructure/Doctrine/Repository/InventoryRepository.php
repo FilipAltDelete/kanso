@@ -105,6 +105,29 @@ final class InventoryRepository implements InventoryStoreInterface
         return $totals;
     }
 
+    public function quantities(array $productIds): array
+    {
+        $binary = array_map(static fn (string $id): string => Uuid::fromString($id)->toBinary(), array_values(array_unique(array_filter($productIds, Uuid::isValid(...)))));
+
+        $quantities = [];
+        // In slices, so a large import stays well inside max_allowed_packet.
+        foreach (array_chunk($binary, 1000) as $slice) {
+            $rows = $this->connection->fetchAllAssociative(
+                'SELECT product_id, location_id, on_hand, reserved FROM inventory_level WHERE product_id IN (?)',
+                [$slice],
+                [ArrayParameterType::BINARY],
+            );
+            foreach ($rows as $row) {
+                $quantities[Uuid::fromBinary((string) $row['product_id'])->toRfc4122()][Uuid::fromBinary((string) $row['location_id'])->toRfc4122()] = [
+                    'onHand' => (int) $row['on_hand'],
+                    'reserved' => (int) $row['reserved'],
+                ];
+            }
+        }
+
+        return $quantities;
+    }
+
     public function findMovementById(string $id): ?InventoryMovement
     {
         return Uuid::isValid($id) ? $this->em->find(InventoryMovement::class, Uuid::fromString($id)) : null;
