@@ -1,6 +1,6 @@
 # ADR-0007: Documents are Twig templates rendered to PDF by dompdf in a worker, stored in S3, downloaded through signed links
 
-- Status: accepted
+- Status: accepted (amended 2026-09-29: one PDF for many orders)
 - Date: 2026-09-26
 
 ## Context
@@ -28,3 +28,14 @@ Phase 1 needs pick lists and packing slips as PDFs, and later phases add labels,
 - Twig is now a backend dependency. The templates are the core's own. When customers can edit templates, they must run in Twig's sandbox (as in Pimsen), and per-installation templates belong in a project bundle or a settings row, never in the core (ADR-0003).
 - Documents print timestamps in UTC and say so, until an installation has a time zone setting.
 - Old documents are not cleaned up yet. A retention job (delete PDFs and rows older than N days) belongs with Phase 4's retention rules.
+
+## Amendment (2026-09-29): one PDF for many orders
+
+A pilot printing a day's orders one by one opens every order page. The order list's bulk-action bar now prints pick lists or packing slips for the selected orders as one PDF.
+
+- **A batch is a document.** `POST /api/orders/bulk-documents` with `{type, locale, orderIds}` queues one `document` row and one `GenerateDocument`, and is polled and downloaded through `GET /api/documents/{id}` like one order's. Such a row has no `order_id`; it lists its orders in `batch_orders` with the versions they had when asked for. The answer is `200` with the `document` (or null) and the orders `skipped`.
+- **Orders that should not be printed are left out and listed** with a code, as bulk status changes list theirs (ADR-0015): `not_found`, `cancelled`, and for pick lists `on_hold` and `nothing_to_pick` (shipped or delivered). A held order can still get a packing slip. When every order is left out, no document is made. One order's own "Print" still prints whatever it is asked for.
+- **At most 100 orders per document**, so one render stays a few hundred pages. The UI says so before asking.
+- **Reuse by content.** `batch_key` hashes the type, the language and every order at its version: the same selection of unchanged orders gets back the document it has, under the same ten-minute rule for pending ones. Any change to any of the orders makes a fresh one.
+- **Layout.** The templates' bodies are partials (`_pick_list.html.twig`, `_packing_slip.html.twig`) that one order's template and the batch template (`<type>_batch.html.twig`) both include, so the two cannot drift. Each order starts a new page, in order-number order. The footer names the batch instead of one order, and the lines table's repeating header carries the order number, so a long order's next page still says whose it is. The PDF is named by when it was asked for, e.g. `pick-lists-20260929-0812.pdf`.
+- The worker renders each order as it is at render time, as for one order; an order gone since is left out, and when none is left the document fails.

@@ -1,0 +1,14 @@
+{# Several orders' packing slips in one PDF, each order starting on a new page, so each can be torn off for its parcel. #}
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ labels.packing_slips }}{% endblock %}
+
+{% block footer %}{{ labels.packing_slips }} · {{ orders|length }} {{ orders|length == 1 ? labels.order|lower : labels.orders }}{% endblock %}
+
+{% block body %}
+    {% for entry in orders %}
+        <div class="order"{% if not loop.first %} style="page-break-before: always;"{% endif %}>
+            {% include '_packing_slip.html.twig' with entry|merge({batch: true}) %}
+        </div>
+    {% endfor %}
+{% endblock %}

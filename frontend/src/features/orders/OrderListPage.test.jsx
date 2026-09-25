@@ -179,11 +179,32 @@ describe('the order list', () => {
     expect(screen.queryByRole('region', { name: 'Bulk actions' })).toBeNull();
   });
 
-  it('offers a viewer no bulk actions', async () => {
+  it('offers a viewer printing, and no bulk changes', async () => {
     answer();
     renderAt('/orders', { user: viewer });
-
     await screen.findByRole('link', { name: '10001' });
-    expect(screen.queryByRole('checkbox', { name: /10001/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /10001/ }));
+    const bar = screen.getByRole('region', { name: 'Bulk actions' });
+
+    expect(within(bar).getByRole('button', { name: 'Print pick lists' })).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: 'Print packing slips' })).toBeTruthy();
+    expect(within(bar).queryByRole('button', { name: 'Change status' })).toBeNull();
+    expect(within(bar).queryByRole('button', { name: 'Add tag' })).toBeNull();
+  });
+
+  it('prints packing slips for the selected orders', async () => {
+    answer({ orders: [orderFixture(), orderFixture({ '@id': '/api/orders/o2', id: 'o2', number: '10002' })] });
+    renderAt('/orders');
+    await screen.findByRole('link', { name: '10001' });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /10001/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /10002/ }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Bulk actions' })).getByRole('button', { name: 'Print packing slips' }));
+
+    expect(screen.getByRole('dialog', { name: 'Packing slips for the selected orders (2)' })).toBeTruthy();
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith('/api/orders/bulk-documents', { method: 'POST', body: { type: 'packing_slip', locale: 'en', orderIds: ['o1', 'o2'] } }),
+    );
   });
 });

@@ -17,4 +17,10 @@ enum DocumentType: string
     {
         return $this->value.'.html.twig';
     }
+
+    /** Several orders' documents in one PDF, each order on its own pages. */
+    public function batchTemplate(): string
+    {
+        return $this->value.'_batch.html.twig';
+    }
 }

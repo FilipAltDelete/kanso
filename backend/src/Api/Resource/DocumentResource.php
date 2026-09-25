@@ -12,7 +12,8 @@ use Kanso\Core\Internal\Api\State\DocumentProvider;
 use Kanso\Core\Internal\Api\State\RequestDocumentProcessor;
 
 /**
- * A generated PDF for an order: a pick list or a packing slip. Asking for one
+ * A generated PDF for an order, or for several (POST /api/orders/bulk-documents):
+ * a pick list or a packing slip. Asking for one
  * queues it; poll it until `status` is `done`, then open `downloadUrl`, a
  * signed link straight to object storage that works for five minutes. Read
  * the document again for a fresh link. Printing changes nothing, so anyone
@@ -43,16 +44,26 @@ final class DocumentResource
     #[ApiProperty(identifier: false, schema: ['type' => 'string', 'enum' => ['pick_list', 'packing_slip']])]
     public string $type = '';
 
-    #[ApiProperty(identifier: false, schema: ['type' => 'string', 'format' => 'uuid'])]
-    public string $orderId = '';
+    /** Null for a document of several orders (see `orders`). */
+    #[ApiProperty(identifier: false, schema: ['type' => ['string', 'null'], 'format' => 'uuid'])]
+    public ?string $orderId = null;
 
-    public string $orderNumber = '';
+    public ?string $orderNumber = null;
 
     /** Set when the document is a packing slip for one shipment. */
     public ?string $shipmentId = null;
 
-    /** The order version the document shows. */
-    public int $orderVersion = 0;
+    /** The order version the document shows; null for several orders. */
+    public ?int $orderVersion = null;
+
+    /**
+     * For a document of several orders: each, in print order, at the version
+     * it had when asked for. Empty for one order's.
+     *
+     * @var list<array{id: string, number: string, version: int}>
+     */
+    #[ApiProperty(schema: ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'number' => ['type' => 'string'], 'version' => ['type' => 'integer']]]])]
+    public array $orders = [];
 
     public string $locale = '';
 

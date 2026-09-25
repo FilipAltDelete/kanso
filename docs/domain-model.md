@@ -34,7 +34,7 @@ erDiagram
 | Shipment | A parcel leaving the order's location: some lines, or part of a line (ADR-0009) | order, location, lines (order_line, quantity), carrier, tracking_number (typed in; both optional), shipped_at, actor; `order_line.shipped_quantity` counts what has left |
 | OrderTag | A free-text label on an order, for filtering and bulk work (ADR-0010) | order, name (1–64 characters, no comma; unique per order ignoring case); at most 20 per order |
 | OrderEvent | Audit trail: creation, every state change, shipments, notes, tag and payment status changes | order, type (`created`, `transition`, `shipment`, `shipment_corrected`, `shipment_voided`, `note`, `tags_changed`, `payment_status_changed`, `edited`, `lines_cancelled`), transition, actor + actor name, before/after, occurred_at |
-| Document | A generated PDF for an order (pick list, packing slip) and the job that makes it | type, order, order_version, locale, status (queued/running/done/failed), storage_key, requested_by |
+| Document | A generated PDF for an order, or for several (pick lists, packing slips), and the job that makes it | type, order, order_version (null for several), batch_orders (id, number, version of each) and batch_key for several, locale, status (queued/running/done/failed), storage_key, requested_by |
 | Return | Phase 3 | — |
 
 ## Order states

@@ -52,6 +52,27 @@ final class DocumentRepository implements DocumentStoreInterface
         return $document;
     }
 
+    public function findReusableBatch(string $batchKey, \DateTimeImmutable $pendingSince): ?Document
+    {
+        /** @var Document|null $document */
+        $document = $this->em->createQueryBuilder()
+            ->select('d')
+            ->from(Document::class, 'd')
+            ->where('d.batchKey = :key')
+            ->andWhere('d.status = :done OR (d.status IN (:pending) AND d.createdAt >= :since)')
+            ->setParameter('key', $batchKey)
+            ->setParameter('done', DocumentStatus::Done->value)
+            ->setParameter('pending', [DocumentStatus::Queued->value, DocumentStatus::Running->value])
+            ->setParameter('since', $pendingSince)
+            ->orderBy('d.createdAt', 'DESC')
+            ->addOrderBy('d.id', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $document;
+    }
+
     public function save(Document $document): void
     {
         $this->em->persist($document);
