@@ -56,10 +56,21 @@ describe('closing tabs', () => {
     expect(activeTab(last).id).toBe('orders');
   });
 
-  it('leaves the only pane standing, empty, when its last tab closes', () => {
+  it('opens the dashboard when the last tab closes, so the workspace is never empty', () => {
     const state = run(opened, { type: 'close', tab: 'home' }, { type: 'close', tab: 'orders' }, { type: 'close', tab: 'products' });
-    expect(state.panes).toEqual({ main: { id: 'main', tabs: [], active: null } });
-    expect(activeTab(state)).toBeNull();
+    expect(Object.keys(state.panes)).toEqual(['main']);
+    expect(activeTab(state)).toEqual({ id: 'home-products', href: '/' });
+
+    // Closing that dashboard opens a fresh one.
+    expect(activeTab(workspaceReducer(state, { type: 'close', tab: 'home-products' })).href).toBe('/');
+  });
+
+  it('opens the dashboard in the pane left when the last tab of a split closes', () => {
+    const split = splitOff(run(emptyWorkspace(), { type: 'open', id: 'a', href: '/orders' }, { type: 'open', id: 'b', href: '/products' }), 'b', 'main', 'right');
+    const state = run(split, { type: 'close', tab: 'a' }, { type: 'close', tab: 'b' });
+    // Closing a's pane left b's; closing b left that one pane, with the dashboard in it.
+    expect(state.layout).toEqual({ type: 'pane', id: 'right' });
+    expect(state.panes.right.tabs).toEqual(['home-b']);
   });
 });
 

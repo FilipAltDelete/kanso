@@ -15,6 +15,9 @@
  * anything. Ids come in on the action, never from inside, for the same reason.
  */
 
+/** What an empty workspace shows: closing the last tab opens it. */
+export const HOME = '/';
+
 /** Enough to compare four lists side by side; more is a pane too small to read. */
 export const MAX_PANES = 4;
 
@@ -159,6 +162,11 @@ function activate(state, paneId, tabId) {
   return { ...state, panes: { ...state.panes, [paneId]: { ...pane, active: tabId } }, focused: paneId };
 }
 
+/**
+ * Close a tab. Closing the last one opens the dashboard in its place: the
+ * workspace is never left empty. Its id derives from the closed tab's, so the
+ * reducer stays pure and the id is still unique.
+ */
 function close(state, tabId) {
   const pane = paneOfTab(state, tabId);
   if (!pane) return state;
@@ -166,7 +174,10 @@ function close(state, tabId) {
   const tabs = { ...state.tabs };
   delete tabs[tabId];
 
-  return withoutTab({ ...state, tabs }, pane.id, tabId);
+  const closed = withoutTab({ ...state, tabs }, pane.id, tabId);
+  if (Object.keys(closed.tabs).length > 0) return closed;
+
+  return open(closed, { id: `home-${tabId}`, href: HOME, newTab: true });
 }
 
 /** Move a tab to `index` in the tab bar of `pane` — its own, or another. */

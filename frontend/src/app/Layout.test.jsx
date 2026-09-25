@@ -87,6 +87,20 @@ describe('the signed-in shell', () => {
     expect(selected()).toBe('Översikt');
   });
 
+  it('opens the dashboard again when the last tab is closed', async () => {
+    renderApp();
+    await screen.findByRole('heading', { name: 'Översikt' });
+    fireEvent.click(within(menu()).getByRole('link', { name: 'Ordrar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stäng Översikt' }));
+    expect(tabNames()).toEqual(['Ordrar']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stäng Ordrar' }));
+
+    expect(tabNames()).toEqual(['Översikt']);
+    expect(await screen.findByRole('heading', { name: 'Översikt' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('comes back with its tabs after a reload', async () => {
     const first = renderApp();
     await screen.findByRole('heading', { name: 'Översikt' });
