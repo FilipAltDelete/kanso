@@ -14,6 +14,9 @@ export default defineConfig({
     // The browser reaches the app through the reverse proxy, so the HMR socket
     // has to be told which port it is actually talking to.
     hmr: { clientPort: Number(process.env.HMR_CLIENT_PORT ?? 8090) },
+    // The end-to-end suite reaches the app as http://proxy:8080 from inside the
+    // compose network (make e2e); Vite refuses hosts it was not told about.
+    allowedHosts: ['proxy'],
   },
   build: { outDir: 'dist', sourcemap: false },
   test: {
