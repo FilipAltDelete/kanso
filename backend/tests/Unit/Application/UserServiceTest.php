@@ -44,6 +44,10 @@ final class UserServiceTest extends TestCase
             {
                 return $work();
             }
+
+            public function forget(): void
+            {
+            }
         };
 
         $this->service = new UserService($this->users, $hasher, new MockClock('2026-09-25 12:00:00'), $transaction, $this->refreshTokens);
