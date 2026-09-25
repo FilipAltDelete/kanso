@@ -5,8 +5,9 @@ import { Button, Checkbox, Dialog, ErrorNotice, Field, Input } from '../../compo
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney, parseMoney } from '../../lib/money.js';
 import { AddressFields, compact, EMPTY_ADDRESS } from './CreateOrderPage.jsx';
+import { localKey } from '../../lib/localKey.js';
 
-const newLine = () => ({ key: crypto.randomUUID(), sku: '', name: '', quantity: '1', unitPrice: '' });
+const newLine = () => ({ key: localKey('line'), sku: '', name: '', quantity: '1', unitPrice: '' });
 
 /** An address from the API (nulls left out) as the form's strings. */
 function addressForm(address) {

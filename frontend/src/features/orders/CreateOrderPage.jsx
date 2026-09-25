@@ -8,9 +8,10 @@ import { useChannels, useCreateOrder } from '../../api/orders.js';
 import { Button, Card, Checkbox, ErrorNotice, Input, Select } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney, parseMoney } from '../../lib/money.js';
+import { localKey } from '../../lib/localKey.js';
 
 export const EMPTY_ADDRESS = { name: '', line1: '', line2: '', postalCode: '', city: '', region: '', countryCode: 'SE', phone: '' };
-const emptyLine = () => ({ key: crypto.randomUUID(), sku: '', name: '', quantity: '1', unitPrice: '' });
+const emptyLine = () => ({ key: localKey('line'), sku: '', name: '', quantity: '1', unitPrice: '' });
 
 /** Blank strings are left out, so optional fields reach the API as absent. */
 export function compact(values) {
