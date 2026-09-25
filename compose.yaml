@@ -190,6 +190,40 @@ services:
     profiles: ["tools"]
     command: ["php", "-v"]
 
+  # The end-to-end suite (e2e/), in the Playwright image with its browsers, on
+  # the installation's own network. It goes through its own proxy to the
+  # *built* frontend of this checkout (e2e-web) and the running API. Neither
+  # depends on `api` here on purpose: bringing them up must never recreate
+  # the installation's API container. `make e2e` starts them and runs it.
+  e2e-web:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      target: web
+    profiles: ["tools"]
+
+  e2e-proxy:
+    image: nginx:1.27-alpine
+    profiles: ["tools"]
+    volumes:
+      - ./docker/proxy/e2e.conf:/etc/nginx/conf.d/default.conf:ro
+
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    profiles: ["tools"]
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /e2e
+    ipc: host
+    environment:
+      HOME: /tmp
+      CI: "${CI:-}"
+      E2E_BASE_URL: "http://e2e-proxy:8080"
+      E2E_USER: "${E2E_USER:-}"
+      E2E_PASSWORD: "${E2E_PASSWORD:-}"
+    volumes:
+      - ./e2e:/e2e
+    command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && npx playwright test"]
+
   # ── Observability, opt-in: `docker compose --profile observability up -d` ──
   # A local stand-in for whatever the operator runs, wired the way the shipped
   # files expect (observability/README.md): the collector adds the

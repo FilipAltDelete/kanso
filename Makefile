@@ -7,7 +7,7 @@ COMPOSE := docker compose
 TOOLS := $(COMPOSE) run --rm --no-deps tools
 NODE := $(COMPOSE) run --rm --no-deps frontend
 
-.PHONY: help install keys up down reset logs shell migrate user test lint stan deptrac cs fix front-install front-lint front-test front-build project-install project-up project-check project-test observability-check
+.PHONY: help install keys up down reset logs shell migrate user test lint stan deptrac cs fix front-install front-lint front-test front-build project-install project-up project-check project-test observability-check e2e
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -65,6 +65,10 @@ cs: ## Coding standards (dry run)
 
 fix: ## Apply coding standards
 	$(TOOLS) vendor/bin/php-cs-fixer fix
+
+e2e: ## End-to-end tests in a browser: this checkout's built frontend + the running API (make up first; ARGS="--grep ship")
+	$(COMPOSE) --profile tools up -d --no-deps --build e2e-web e2e-proxy
+	$(COMPOSE) run --rm --no-deps e2e sh -c 'npm ci --no-audit --no-fund --loglevel=error && npx playwright test $(ARGS)'
 
 front-install: ## Install frontend dependencies (inside the container: Alpine needs its own binaries)
 	$(NODE) npm install --no-audit --no-fund

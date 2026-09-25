@@ -1,0 +1,12 @@
+{
+  "name": "@kanso/e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests of Kanso in a real browser, against a running installation.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

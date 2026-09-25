@@ -64,6 +64,7 @@ make front-test / front-lint / front-build
 make user EMAIL=… PASSWORD=… ROLE=ROLE_OPERATOR
 make project-install / project-check / project-test / project-up   # the project/ skeleton
 make observability-check              # promtool: check the rules in observability/ and run their tests
+make e2e [ARGS="--grep ship"]         # Playwright (e2e/) against this checkout's built frontend + the running API
 ```
 
 Console: `docker compose run --rm --no-deps tools php bin/console …` — `kanso:install`, `kanso:user:create`, `kanso:api-key:create`, `kanso:api-key:revoke`, `kanso:health`, `kanso:jwt:generate-keys`.

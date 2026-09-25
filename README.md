@@ -40,6 +40,7 @@ make front-test          # Vitest
 make user EMAIL=ops@example.com PASSWORD=… ROLE=ROLE_OPERATOR
 make project-test        # the customer project skeleton's tests (make project-install first)
 make observability-check # promtool on the alert and recording rules
+make e2e                 # end-to-end tests in Chromium: the built frontend + the running API (make up first)
 make logs / down / reset
 ```
 
