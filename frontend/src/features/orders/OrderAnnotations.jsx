@@ -106,7 +106,7 @@ export function TagsCard({ order }) {
         <form onSubmit={add} noValidate className="flex items-end gap-2">
           <div className="flex-1">
             <Field label={t('orders.tags.newLabel')} error={invalid ? t('orders.tags.invalid') : null}>
-              {(props) => <Input {...props} list={listId} autoComplete="off" onFocus={() => setSuggest(true)} value={draft} onChange={(event) => setDraft(event.target.value)} />}
+              {(props) => <Input {...props} data-shortcut="tag" list={listId} autoComplete="off" onFocus={() => setSuggest(true)} value={draft} onChange={(event) => setDraft(event.target.value)} />}
             </Field>
           </div>
           <Button type="submit" size="sm" variant="outline" className="mb-0.5" disabled={change.isPending}>
@@ -159,6 +159,7 @@ export function NoteForm({ order }) {
         {(props) => (
           <textarea
             {...props}
+            data-shortcut="note"
             rows={3}
             maxLength={NOTE_MAX_LENGTH}
             value={note}

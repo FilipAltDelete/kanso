@@ -70,4 +70,14 @@ describe('table view in the URL', () => {
     expect(isDefaultView({ ...base, globalFilter: 'x' }, base)).toBe(false);
     expect(isDefaultView({ ...base, sorting: [] }, base)).toBe(false);
   });
+
+  it('keeps a multi-value filter as one comma-joined parameter', () => {
+    const view = parseView({ 'f.tags': 'VIP,gift wrap', 'f.status': 'on_hold' });
+
+    expect(view.columnFilters).toEqual([
+      { id: 'tags', value: 'VIP,gift wrap' },
+      { id: 'status', value: 'on_hold' },
+    ]);
+    expect(toSearch(view)).toMatchObject({ 'f.tags': 'VIP,gift wrap', 'f.status': 'on_hold' });
+  });
 });

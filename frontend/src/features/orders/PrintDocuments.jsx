@@ -38,12 +38,15 @@ function PrintDocument({ order, type }) {
   const ask = () => request.mutate({ type, locale }, { onSuccess: (created) => setDocumentId(created.id) });
   const busy = request.isPending || (documentId !== null && (!data || data.status === 'queued' || data.status === 'running'));
   const label = t(`documents.type.${type}`);
+  // The first document (the pick list) is what the "p" shortcut prints.
+  const shortcut = type === DOCUMENT_TYPES[0] ? 'print' : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {data?.status === 'done' && data.downloadUrl ? (
         <a
           href={data.downloadUrl}
+          data-shortcut={shortcut}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex h-8 items-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-accent-fg hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
@@ -52,7 +55,7 @@ function PrintDocument({ order, type }) {
           {t(`documents.open.${type}`)}
         </a>
       ) : (
-        <Button size="sm" variant="outline" onClick={ask} disabled={busy} aria-describedby={`print-${type}-status`}>
+        <Button size="sm" variant="outline" data-shortcut={shortcut} onClick={ask} disabled={busy} aria-describedby={`print-${type}-status`}>
           {data?.status === 'failed' ? <RotateCw className="size-4" aria-hidden="true" /> : <Printer className="size-4" aria-hidden="true" />}
           {data?.status === 'failed' ? t(`documents.retry.${type}`) : label}
         </Button>

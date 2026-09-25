@@ -198,4 +198,25 @@ describe('DataTable', () => {
 
     expect(grid().getAttribute('aria-busy')).toBe('true');
   });
+
+  it('filters by several values of a column with a checkbox list', () => {
+    const multi = columns.map((column) => (column.accessorKey === 'status' ? { ...column, meta: { filter: { ...column.meta.filter, type: 'multi' } } } : column));
+    renderTable({ columns: multi });
+
+    const toggle = screen.getByRole('button', { name: 'Status All' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const group = screen.getByRole('group', { name: 'Status' });
+    expect(document.activeElement).toBe(within(group).getByRole('checkbox', { name: 'Pending' }));
+
+    fireEvent.click(within(group).getByRole('checkbox', { name: 'Pending' }));
+    expect(screen.getByText('1–10 of 10')).toBeTruthy();
+    fireEvent.click(within(group).getByRole('checkbox', { name: 'Shipped' }));
+    expect(screen.getByText('1–25 of 30')).toBeTruthy();
+    expect(toggle.textContent).toBe('Pending, Shipped');
+
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('group', { name: 'Status' })).toBeNull();
+  });
 });
