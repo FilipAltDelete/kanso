@@ -10,6 +10,8 @@ export const orderImportResultSchema = z.object({
   created: z.number().int(),
   existing: z.number().int(),
   failed: z.number().int(),
+  // Absent in import history recorded before customers were linked.
+  newCustomers: z.number().int().optional(),
   errors: z.array(z.object({ row: z.number().int(), reference: z.string().nullable(), field: z.string(), code: z.string(), message: z.string() })),
   importRunId: z.string().nullish(),
 });

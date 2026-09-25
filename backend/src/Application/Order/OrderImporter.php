@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Kanso\Core\Internal\Application\Order;
 
+use Kanso\Core\Internal\Application\Customer\CustomerInput;
+use Kanso\Core\Internal\Application\Customer\CustomerService;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
 use Kanso\Core\Internal\Application\Import\Collation;
 use Kanso\Core\Internal\Application\Import\CsvFile;
 use Kanso\Core\Internal\Domain\Common\Actor;
+use Kanso\Core\Internal\Domain\Common\TransactionInterface;
+use Kanso\Core\Internal\Domain\Customer\Customer;
+use Kanso\Core\Internal\Domain\Customer\CustomerStoreInterface;
 use Kanso\Core\Internal\Domain\Order\Channel;
 use Kanso\Core\Internal\Domain\Order\ChannelStoreInterface;
 use Kanso\Core\Internal\Domain\Order\Order;
@@ -35,6 +40,12 @@ use Kanso\Core\Internal\Domain\Order\PaymentStatus;
  * `paymentStatus`, `tags` (separated by "|") and `note` are order columns
  * too. They are set on the new order in the transaction that creates it,
  * through the order's own methods, so each writes its usual event.
+ *
+ * An order with a `customerEmail` is linked to the customer record with that
+ * email (ignoring case), and a customer is created, from the order's name
+ * and email, when none has it. The customer is created only once the order
+ * has passed its checks, just before it is written, so a failed order leaves
+ * no customer behind. The preview counts the customers it would create.
  */
 final class OrderImporter
 {
@@ -93,6 +104,9 @@ final class OrderImporter
         private readonly OrderService $service,
         private readonly OrderStoreInterface $orders,
         private readonly ChannelStoreInterface $channels,
+        private readonly CustomerStoreInterface $customers,
+        private readonly CustomerService $customerService,
+        private readonly TransactionInterface $transaction,
     ) {
     }
 
@@ -124,6 +138,8 @@ final class OrderImporter
 
         $existing = $this->existing($groups);
         $created = $already = $failed = 0;
+        /** @var array<string, true> $newCustomers canonical emails of the customers created, or on a dry run to be created */
+        $newCustomers = [];
 
         foreach ($groups as $key => $group) {
             if (isset($existing[$key])) {
@@ -136,10 +152,24 @@ final class OrderImporter
             $annotations = self::annotations($group, $groupErrors);
             if ([] === $groupErrors) {
                 try {
+                    $email = self::first($group, 'customerEmail')[1] ?? null;
+                    $customer = null === $email ? null : $this->customers->findByEmail($email);
+                    $newCustomer = null !== $email && null === $customer && mb_strlen($email) <= Customer::MAX_EMAIL_LENGTH;
                     if ($dryRun) {
                         $this->service->check($input);
                     } else {
+                        if ($newCustomer) {
+                            // Checked before the customer is created, so a failed order leaves none behind.
+                            $this->service->check($input);
+                            $customer = $this->createCustomer($email, (string) (self::first($group, 'customerName')[1] ?? ''), $actor);
+                        }
+                        if (null !== $customer) {
+                            $input = self::linked($input, (string) $customer->id());
+                        }
                         $this->service->create($input, $actor, self::annotate($annotations, $actor));
+                    }
+                    if ($newCustomer) {
+                        $newCustomers[Customer::canonicalEmail($email)] = true;
                     }
                     ++$created;
                     continue;
@@ -157,7 +187,39 @@ final class OrderImporter
 
         usort($errors, static fn (array $a, array $b): int => $a['row'] <=> $b['row']);
 
-        return new OrderImportResult($dryRun, \count($file->rows), \count($groups), $created, $already, $failed, $errors);
+        return new OrderImportResult($dryRun, \count($file->rows), \count($groups), $created, $already, $failed, $errors, \count($newCustomers));
+    }
+
+    /**
+     * A customer with the order's name and email. Another import or an
+     * operator may create one with the same email in the meantime; then that
+     * one is the order's customer. In its own transaction, so a lost race
+     * resets the entity manager and the import goes on (ADR-0015).
+     */
+    private function createCustomer(string $email, string $name, Actor $actor): Customer
+    {
+        try {
+            return $this->transaction->run(fn (): Customer => $this->customerService->create(new CustomerInput($email, $name), $actor));
+        } catch (ValidationFailed $e) { // @phpstan-ignore catch.neverThrown (thrown by create(), through run())
+            return $this->customers->findByEmail($email) ?? throw $e;
+        }
+    }
+
+    /**
+     * The create input with `customer.id` set.
+     *
+     * @param array<string, mixed> $input
+     *
+     * @return array<string, mixed>
+     */
+    private static function linked(array $input, string $customerId): array
+    {
+        $customer = $input['customer'] ?? [];
+        \assert(\is_array($customer));
+        $customer['id'] = $customerId;
+        $input['customer'] = $customer;
+
+        return $input;
     }
 
     /**

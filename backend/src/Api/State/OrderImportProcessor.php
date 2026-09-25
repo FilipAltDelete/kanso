@@ -44,10 +44,11 @@ final class OrderImportProcessor implements ProcessorInterface
         $resource->created = $result->created;
         $resource->existing = $result->existing;
         $resource->failed = $result->failed;
+        $resource->newCustomers = $result->newCustomers;
         $resource->errors = $result->errors;
 
         if (!$result->dryRun) {
-            $counts = ['rows' => $result->rows, 'orders' => $result->orders, 'created' => $result->created, 'existing' => $result->existing, 'failed' => $result->failed];
+            $counts = ['rows' => $result->rows, 'orders' => $result->orders, 'created' => $result->created, 'existing' => $result->existing, 'failed' => $result->failed, 'newCustomers' => $result->newCustomers];
             $resource->importRunId = $this->log->record(ImportRun::ORDERS, $request->query->getString('filename'), $actor, $counts, $result->errors)->id()->toRfc4122();
         }
 

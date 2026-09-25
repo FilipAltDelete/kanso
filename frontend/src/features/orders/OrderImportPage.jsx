@@ -10,7 +10,9 @@ import { useCanOperate } from './shared.jsx';
  * with the same order reference are one order; an order the channel already
  * has under its reference is left alone, so the same file twice creates
  * nothing the second time. Optional paymentStatus, tags (separated by |)
- * and note columns are set on the order as it is created.
+ * and note columns are set on the order as it is created. An order with a
+ * customerEmail is linked to the customer with that email, which is created
+ * when none has it; the preview counts those new customers.
  */
 export function OrderImportPage() {
   const { t } = useI18n();
@@ -31,6 +33,9 @@ export function OrderImportPage() {
       { key: 'created', label: t(result.dryRun ? 'orderImport.count.toCreate' : 'orderImport.count.created'), value: result.created, tone: 'green' },
       { key: 'existing', label: t('orderImport.count.existing'), value: result.existing },
       { key: 'failed', label: t('orderImport.count.failed'), value: result.failed, tone: result.failed > 0 ? 'red' : 'slate' },
+      ...(result.newCustomers === undefined
+        ? []
+        : [{ key: 'newCustomers', label: t(result.dryRun ? 'orderImport.count.newCustomersToCreate' : 'orderImport.count.newCustomers'), value: result.newCustomers }]),
     ],
     [t],
   );
@@ -47,7 +52,7 @@ export function OrderImportPage() {
       counts={counts}
       changes={(result) => result.created}
       runLabel={(count) => t('orderImport.run', { count })}
-      format={[t('orderImport.formatRows'), t('orderImport.formatRequired'), t('orderImport.formatOptional'), t('orderImport.formatAnnotations'), t('orderImport.formatPrices'), t('orderImport.formatAgain')]}
+      format={[t('orderImport.formatRows'), t('orderImport.formatRequired'), t('orderImport.formatOptional'), t('orderImport.formatAnnotations'), t('orderImport.formatPrices'), t('orderImport.formatCustomers'), t('orderImport.formatAgain')]}
       template={{
         filename: 'orders.csv',
         rows: [

@@ -208,7 +208,7 @@ jobs:
           retention-days: 7
 
   # The images every installation runs. Publishing them to a registry is the
-  # open Phase 0 decision (see ROADMAP.md); until then CI proves they build.
+  # deferred deploy-target decision (see ROADMAP.md); until then CI proves they build.
   images:
     name: Images
     runs-on: ubuntu-latest

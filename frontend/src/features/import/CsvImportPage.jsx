@@ -163,7 +163,7 @@ export function CsvImportPage({ title, subtitle, back, done: doneLink, canImport
 
 function Counts({ items, number }) {
   return (
-    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+    <dl className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3">
       {items.map(({ key, label, value, tone = 'slate' }) => (
         <div key={key} className="rounded-md bg-slate-50 p-3">
           <dt className="text-xs text-slate-500">{label}</dt>

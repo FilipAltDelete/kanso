@@ -22,7 +22,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 
 **Exit criteria:** a user can log in, see an empty dashboard, and the app deploys automatically.
 
-**Status (2026-09-25):**
+**Status (2026-09-25): closed**, except that the app does not yet deploy automatically — that part of the exit criterion is deferred (below).
 - [x] Stack, deployment model and auth as Pimsen (`docs/adr/0001`, `0002`)
 - [x] Docker images (api, worker, web), Compose stack, Makefile, hand-written migrations, dev admin seeding
 - [x] JWT login with rotating refresh cookie, login rate limiting, roles (Admin, Operator, Viewer)
@@ -31,7 +31,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] CI: lint, static analysis, tests, image builds (GitHub Actions)
 - [x] Domain model draft (`docs/domain-model.md`)
 - [x] Customer-specific code: core packaged as `kanso/core` + `kanso/contracts`, `project/` skeleton with a sample bundle (`docs/adr/0003`, `docs/extensions.md`)
-- [ ] Deploy target: where images are pushed and which host runs staging/production (open decision)
+- [ ] Deploy target: where images are pushed and which host runs staging/production. **Deferred:** CI builds the images but does not publish or deploy them; picked up again when a staging host is needed
 - [x] Metrics and tracing as in Pimsen ADR-026: Prometheus `/metrics` (counters in Redis), hand-placed OpenTelemetry spans (off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set), `trace_id` in logs, dashboards and alert rules in `observability/`
 - [x] Table component for Phase 1 lists: `frontend/src/components/ui/table/` (TanStack Table + Virtual, view in the URL); dev demo at `/dev/table`
 

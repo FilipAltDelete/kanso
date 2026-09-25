@@ -11,6 +11,7 @@ const preview = {
   created: 1,
   existing: 1,
   failed: 1,
+  newCustomers: 2,
   errors: [
     { row: 4, reference: 'WEB-1002', field: 'sku', code: 'unknown_sku', message: 'No product with SKU "NOPE".' },
     { row: 5, reference: 'WEB-1002', field: 'customerName', code: 'inconsistent', message: 'Row 4 of this order says "Anna".' },
@@ -58,6 +59,8 @@ describe('the order import page', () => {
     expect(await screen.findByText('Preview: nothing has been imported yet')).toBeTruthy();
     expect(importCalls()).toEqual([['/api/order-imports?dryRun=true&filename=orders.csv', expect.objectContaining({ method: 'POST', body: file })]]);
     expect(screen.getByText('Already imported')).toBeTruthy();
+    const newCustomers = screen.getByText('New customers');
+    expect(within(newCustomers.parentElement).getByText('2')).toBeTruthy();
 
     const problems = screen.getByRole('region', { name: 'Problems (2)' });
     expect(within(problems).getByText('No product with this SKU.')).toBeTruthy();
