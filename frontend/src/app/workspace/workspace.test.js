@@ -1,4 +1,4 @@
-import { activeTab, emptyWorkspace, layoutBoxes, paneIds, restoreWorkspace, workspaceReducer } from './workspace.js';
+import { activeTab, canClose, emptyWorkspace, layoutBoxes, paneIds, restoreWorkspace, workspaceReducer } from './workspace.js';
 
 function run(state, ...actions) {
   return actions.reduce(workspaceReducer, state);
@@ -61,8 +61,10 @@ describe('closing tabs', () => {
     expect(Object.keys(state.panes)).toEqual(['main']);
     expect(activeTab(state)).toEqual({ id: 'home-products', href: '/' });
 
-    // Closing that dashboard opens a fresh one.
-    expect(activeTab(workspaceReducer(state, { type: 'close', tab: 'home-products' })).href).toBe('/');
+    // The dashboard alone cannot be closed: it would only open again.
+    expect(canClose(state, 'home-products')).toBe(false);
+    expect(workspaceReducer(state, { type: 'close', tab: 'home-products' })).toBe(state);
+    expect(canClose(opened, 'home')).toBe(true);
   });
 
   it('opens the dashboard in the pane left when the last tab of a split closes', () => {

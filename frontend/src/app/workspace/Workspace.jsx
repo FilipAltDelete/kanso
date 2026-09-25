@@ -6,7 +6,7 @@ import { FrontTabProvider } from '../../lib/frontTab.js';
 import { useI18n } from '../../lib/i18n.jsx';
 import { cn } from '../../lib/utils.js';
 import { createTabRouter } from '../router.jsx';
-import { MAX_PANES, activeTab, layoutBoxes, pathOf, paneIds } from './workspace.js';
+import { MAX_PANES, activeTab, canClose, layoutBoxes, pathOf, paneIds } from './workspace.js';
 import { newId, useWorkspace } from './WorkspaceProvider.jsx';
 
 const TAB_TYPE = 'application/x-kanso-tab';
@@ -254,6 +254,7 @@ function TabBar({ pane, box, highlight, drag }) {
             dragging={drag.tab === id}
             insertBefore={insertAt === index}
             onActivate={() => dispatch({ type: 'activate', pane: pane.id, tab: id })}
+            closable={canClose(state, id)}
             onClose={() => dispatch({ type: 'close', tab: id })}
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = 'move';
@@ -278,7 +279,7 @@ function InsertMarker() {
   return <span aria-hidden="true" className="mb-1.5 h-5 w-0.5 shrink-0 self-end rounded bg-accent" />;
 }
 
-function Tab({ tab, active, dragging, insertBefore, onActivate, onClose, onDragStart, onDragEnd }) {
+function Tab({ tab, active, closable, dragging, insertBefore, onActivate, onClose, onDragStart, onDragEnd }) {
   const { t } = useI18n();
   const { title, icon: Icon } = useTabTitle(tab.href);
 
@@ -293,7 +294,8 @@ function Tab({ tab, active, dragging, insertBefore, onActivate, onClose, onDragS
         onDragEnd={onDragEnd}
         title={t('workspace.tabHint', { title })}
         className={cn(
-          'group flex h-full max-w-56 shrink-0 items-center gap-1 rounded-t-md border border-b-0 pl-3 pr-1 text-sm',
+          'group flex h-full max-w-56 shrink-0 items-center gap-1 rounded-t-md border border-b-0 pl-3 text-sm',
+          closable ? 'pr-1' : 'pr-3',
           active ? 'border-slate-200 bg-white text-slate-900' : 'border-transparent text-slate-600 hover:bg-slate-50/70 hover:text-slate-900',
           dragging && 'opacity-40',
         )}
@@ -305,7 +307,7 @@ function Tab({ tab, active, dragging, insertBefore, onActivate, onClose, onDragS
           onClick={onActivate}
           // Middle click closes, as it does in a browser.
           onAuxClick={(event) => {
-            if (event.button !== 1) return;
+            if (event.button !== 1 || !closable) return;
             event.preventDefault();
             onClose();
           }}
@@ -314,17 +316,20 @@ function Tab({ tab, active, dragging, insertBefore, onActivate, onClose, onDragS
           <Icon aria-hidden="true" className="size-3.5 shrink-0 text-slate-400" />
           <span className="truncate">{title}</span>
         </button>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t('workspace.close', { title })}
-          className={cn(
-            'rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700',
-            !active && 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-          )}
-        >
-          <X aria-hidden="true" className="size-3.5" />
-        </button>
+        {/* The dashboard alone has nothing to close to. */}
+        {closable ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('workspace.close', { title })}
+            className={cn(
+              'rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700',
+              !active && 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+            )}
+          >
+            <X aria-hidden="true" className="size-3.5" />
+          </button>
+        ) : null}
       </div>
     </>
   );

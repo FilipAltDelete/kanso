@@ -99,6 +99,11 @@ describe('the signed-in shell', () => {
     expect(tabNames()).toEqual(['Översikt']);
     expect(await screen.findByRole('heading', { name: 'Översikt' })).toBeTruthy();
     expect(window.location.pathname).toBe('/');
+
+    // Alone, the dashboard has no close button, and Alt+W leaves it be.
+    expect(screen.queryByRole('button', { name: 'Stäng Översikt' })).toBeNull();
+    fireEvent.keyDown(document, { code: 'KeyW', key: 'w', altKey: true });
+    expect(tabNames()).toEqual(['Översikt']);
   });
 
   it('opens what the dashboard links to in a new tab, leaving the dashboard as it was', async () => {

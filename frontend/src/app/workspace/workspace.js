@@ -163,13 +163,24 @@ function activate(state, paneId, tabId) {
 }
 
 /**
+ * Whether a tab can be closed: any tab but the dashboard when it is the only
+ * one, which closing would only open again.
+ */
+export function canClose(state, tabId) {
+  const tab = state.tabs[tabId];
+  if (!tab) return false;
+
+  return Object.keys(state.tabs).length > 1 || pathOf(tab.href) !== HOME;
+}
+
+/**
  * Close a tab. Closing the last one opens the dashboard in its place: the
  * workspace is never left empty. Its id derives from the closed tab's, so the
  * reducer stays pure and the id is still unique.
  */
 function close(state, tabId) {
   const pane = paneOfTab(state, tabId);
-  if (!pane) return state;
+  if (!pane || !canClose(state, tabId)) return state;
 
   const tabs = { ...state.tabs };
   delete tabs[tabId];
