@@ -8,7 +8,9 @@ use Kanso\Core\Internal\Application\Exception\Conflict;
 use Kanso\Core\Internal\Application\Import\Collation;
 use Kanso\Core\Internal\Application\Import\CsvFile;
 use Kanso\Core\Internal\Domain\Catalog\Product;
+use Kanso\Core\Internal\Domain\Catalog\ProductEvent;
 use Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface;
+use Kanso\Core\Internal\Domain\Common\Actor;
 use Kanso\Core\Internal\Domain\Common\ConcurrentModification;
 use Kanso\Core\Internal\Domain\Common\TransactionInterface;
 use Psr\Clock\ClockInterface;
@@ -42,7 +44,8 @@ final class ProductImporter
     ) {
     }
 
-    public function import(string $csv, bool $dryRun): ProductImportResult
+    /** `$actor` is who the products' history names; left out, the system. */
+    public function import(string $csv, bool $dryRun, ?Actor $actor = null): ProductImportResult
     {
         $file = CsvFile::read($csv, self::COLUMNS, self::REQUIRED);
 
@@ -103,7 +106,7 @@ final class ProductImporter
         }
 
         if (!$dryRun && ([] !== $creates || [] !== $updates)) {
-            $this->write($creates, $updates);
+            $this->write($creates, $updates, $actor ?? CatalogService::system());
         }
 
         usort($errors, static fn (array $a, array $b): int => $a['row'] <=> $b['row']);
@@ -173,21 +176,29 @@ final class ProductImporter
      * @param list<array{sku: string, name: string, barcode?: ?string, weightGrams?: ?int}>                 $creates
      * @param list<array{Product, array{sku: string, name: string, barcode?: ?string, weightGrams?: ?int}}> $updates
      */
-    private function write(array $creates, array $updates): void
+    private function write(array $creates, array $updates, Actor $actor): void
     {
         $now = $this->clock->now();
         try {
-            $this->transaction->run(function () use ($creates, $updates, $now): void {
+            $this->transaction->run(function () use ($creates, $updates, $actor, $now): void {
                 foreach ($creates as $values) {
-                    $this->products->add(new Product($values['sku'], $values['name'], $values['barcode'] ?? null, $values['weightGrams'] ?? null, $now));
+                    $product = new Product($values['sku'], $values['name'], $values['barcode'] ?? null, $values['weightGrams'] ?? null, $now);
+                    $this->products->add($product);
+                    $this->products->addEvent(ProductEvent::created($product, ProductEvent::SOURCE_IMPORT, $actor, $now));
                 }
                 foreach ($updates as [$product, $values]) {
+                    $before = ProductEvent::state($product);
                     $product->update(
                         $values['name'],
                         \array_key_exists('barcode', $values) ? $values['barcode'] : $product->barcode(),
                         \array_key_exists('weightGrams', $values) ? $values['weightGrams'] : $product->weightGrams(),
                         $now,
                     );
+                    // Only rows that differ are updates, so there is always a change to record.
+                    $event = ProductEvent::updated($product, $before, ProductEvent::SOURCE_IMPORT, $actor, $now);
+                    if (null !== $event) {
+                        $this->products->addEvent($event);
+                    }
                 }
             });
         } catch (ConcurrentModification) {

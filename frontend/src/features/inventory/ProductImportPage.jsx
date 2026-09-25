@@ -21,6 +21,20 @@ export function ProductImportPage() {
     (error) => firstTranslation(t, [`catalog.violation.${error.field}.${error.code}`, `import.error.${error.code}`], error.message, { max: formatQuantity(MAX_WEIGHT_GRAMS, locale) }),
     [t, locale],
   );
+  const counts = useCallback(
+    (result) => {
+      const prefix = result.dryRun ? 'import.will' : 'import.did';
+
+      return [
+        { key: 'rows', label: t('import.count.rows'), value: result.rows },
+        { key: 'created', label: t(`${prefix}.created`), value: result.created, tone: 'green' },
+        { key: 'updated', label: t(`${prefix}.updated`), value: result.updated, tone: 'green' },
+        { key: 'unchanged', label: t(`${prefix}.unchanged`), value: result.unchanged },
+        { key: 'failed', label: t('import.count.failed'), value: result.failed, tone: result.failed > 0 ? 'red' : 'slate' },
+      ];
+    },
+    [t],
+  );
 
   return (
     <CsvImportPage
@@ -31,17 +45,7 @@ export function ProductImportPage() {
       canImport={canImport}
       preview={preview}
       run={run}
-      counts={(result) => {
-        const prefix = result.dryRun ? 'import.will' : 'import.did';
-
-        return [
-          { key: 'rows', label: t('import.count.rows'), value: result.rows },
-          { key: 'created', label: t(`${prefix}.created`), value: result.created, tone: 'green' },
-          { key: 'updated', label: t(`${prefix}.updated`), value: result.updated, tone: 'green' },
-          { key: 'unchanged', label: t(`${prefix}.unchanged`), value: result.unchanged },
-          { key: 'failed', label: t('import.count.failed'), value: result.failed, tone: result.failed > 0 ? 'red' : 'slate' },
-        ];
-      }}
+      counts={counts}
       changes={(result) => result.created + result.updated}
       runLabel={(count) => t('import.run', { count })}
       format={[t('import.formatColumns'), t('import.formatMatching'), t('import.formatBlank')]}
@@ -54,6 +58,7 @@ export function ProductImportPage() {
       }}
       errorColumns={errorColumns}
       problem={problem}
+      history="products"
     />
   );
 }

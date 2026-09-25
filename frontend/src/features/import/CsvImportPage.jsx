@@ -1,11 +1,12 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, Download, FileUp, RotateCcw } from 'lucide-react';
 import { Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
-import { DataTable } from '../../components/ui/table/index.js';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatQuantity } from '../../lib/quantity.js';
 import { firstTranslation } from '../../lib/translate.js';
+import { ImportHistory } from './ImportHistory.jsx';
+import { RowErrors } from './RowErrors.jsx';
 
 /** The server's limits for one CSV file (Application/Import/CsvFile); checked here first so a too-large file is never sent. */
 export const IMPORT_MAX_BYTES = 1024 * 1024;
@@ -26,8 +27,9 @@ const TONES = { slate: 'text-slate-900', green: 'text-green-800', red: 'text-red
  * - `runLabel(count)`, `format` (lines describing the file), `template` ({ filename, rows })
  * - `errorColumns`: extra columns for the problem table, after the row number
  * - `problem(error)`: a row error in the UI's language
+ * - `history`: `products` or `orders`, to list the past imports of that kind below (ADR-0014)
  */
-export function CsvImportPage({ title, subtitle, back, done: doneLink, canImport, preview, run, counts, changes, runLabel, format, template, errorColumns, problem }) {
+export function CsvImportPage({ title, subtitle, back, done: doneLink, canImport, preview, run, counts, changes, runLabel, format, template, errorColumns, problem, history }) {
   const { t, locale } = useI18n();
   const inputRef = useRef(null);
   const inputId = useId();
@@ -153,6 +155,8 @@ export function CsvImportPage({ title, subtitle, back, done: doneLink, canImport
 
         {(done ?? checked)?.errors.length ? <RowErrors errors={(done ?? checked).errors} columns={errorColumns} problem={problem} /> : null}
       </div>
+
+      {history ? <ImportHistory type={history} counts={counts} errorColumns={errorColumns} problem={problem} /> : null}
     </div>
   );
 }
@@ -190,29 +194,5 @@ function FileProblems({ error }) {
         ))}
       </ul>
     </div>
-  );
-}
-
-function RowErrors({ errors, columns: extra, problem }) {
-  const { t } = useI18n();
-  const rows = useMemo(() => errors.map((error, index) => ({ ...error, id: String(index) })), [errors]);
-
-  const columns = useMemo(
-    () => [
-      { accessorKey: 'row', header: t('import.error.row'), meta: { align: 'end' }, enableGlobalFilter: false },
-      ...extra,
-      { accessorKey: 'field', header: t('import.error.field'), cell: ({ getValue }) => (getValue() === 'row' ? t('import.field.row') : getValue()) },
-      { id: 'problem', header: t('import.error.problem'), enableSorting: false, accessorFn: problem },
-    ],
-    [t, extra, problem],
-  );
-
-  return (
-    <section aria-labelledby="import-errors" className="space-y-2">
-      <h2 id="import-errors" className="text-base font-semibold">
-        {t('import.errorsTitle', { count: errors.length })}
-      </h2>
-      <DataTable label={t('import.errorsTitle', { count: errors.length })} data={rows} columns={columns} getRowId={(row) => row.id} searchable={rows.length > 10} emptyMessage="" />
-    </section>
   );
 }

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { api } from './client.js';
+import { importQuery } from './importRuns.js';
 
 /** Why stock was adjusted; the API's list, in the order the dialog offers them. */
 export const ADJUSTMENT_REASONS = ['received', 'count', 'damaged', 'lost', 'found', 'returned', 'correction', 'other'];
@@ -151,11 +152,15 @@ export function useAdjustStock(productId) {
   });
 }
 
-/** The catalog changed: every product and location list refetches. */
+/** The catalog changed: every product and location list refetches, and a changed product's history. */
 function useCatalogRefresh(key) {
   const queryClient = useQueryClient();
 
-  return () => queryClient.invalidateQueries({ queryKey: [key] });
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [key] }),
+      ...(key === 'products' ? [queryClient.invalidateQueries({ queryKey: ['productEvents'] })] : []),
+    ]);
 }
 
 export function useCreateProduct() {
@@ -213,19 +218,40 @@ export const importResultSchema = z.object({
   unchanged: z.number().int(),
   failed: z.number().int(),
   errors: z.array(z.object({ row: z.number().int(), sku: z.string().nullable(), field: z.string(), code: z.string(), message: z.string() })),
+  importRunId: z.string().nullish(),
 });
 
 /** `{ file, dryRun }`: a dry run is the preview, and writes nothing. */
 export function useImportProducts() {
+  const queryClient = useQueryClient();
   const refresh = useCatalogRefresh('products');
 
   return useMutation({
     mutationFn: async ({ file, dryRun }) =>
-      importResultSchema.parse(
-        await api(`/api/product-imports?dryRun=${dryRun ? 'true' : 'false'}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } }),
-      ),
+      importResultSchema.parse(await api(`/api/product-imports?${importQuery(file, dryRun)}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } })),
     onSuccess: (result) => {
-      if (!result.dryRun) refresh();
+      if (result.dryRun) return;
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ['importRuns'] });
     },
   });
+}
+
+const fieldValue = z.union([z.string(), z.number(), z.null()]);
+
+export const productEventSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  type: z.enum(['created', 'updated']),
+  source: z.string(),
+  actorId: z.string(),
+  actorName: z.string(),
+  before: z.record(z.string(), fieldValue).nullable(),
+  after: z.record(z.string(), fieldValue),
+  occurredAt: z.string(),
+});
+
+/** A product's history of creates and changes (ADR-0013), newest first. */
+export function useProductEvents(productId, view) {
+  return usePage('productEvents', '/api/product-events', productEventSchema, view, { product: productId });
 }

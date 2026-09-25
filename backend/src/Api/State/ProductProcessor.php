@@ -9,6 +9,7 @@ use ApiPlatform\State\ProcessorInterface;
 use Kanso\Core\Internal\Api\Resource\ProductInput;
 use Kanso\Core\Internal\Api\Resource\ProductPatch;
 use Kanso\Core\Internal\Api\Resource\ProductResource;
+use Kanso\Core\Internal\Api\Security\CurrentActor;
 use Kanso\Core\Internal\Application\Catalog\CatalogService;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
 use Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface;
@@ -22,13 +23,14 @@ final class ProductProcessor implements ProcessorInterface
     public function __construct(
         private readonly CatalogService $catalog,
         private readonly ProductStoreInterface $products,
+        private readonly CurrentActor $actor,
     ) {
     }
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ProductResource
     {
         if ($data instanceof ProductInput) {
-            return ProductProvider::present($this->catalog->createProduct($data->sku, $data->name, $data->barcode, $data->weightGrams), null);
+            return ProductProvider::present($this->catalog->createProduct($data->sku, $data->name, $data->barcode, $data->weightGrams, $this->actor->get()), null);
         }
 
         \assert($data instanceof ProductPatch);
@@ -44,6 +46,7 @@ final class ProductProcessor implements ProcessorInterface
             Sent::has($data, 'name') ? $data->name : $product->name(),
             Sent::has($data, 'barcode') ? $data->barcode : $product->barcode(),
             Sent::has($data, 'weightGrams') ? $data->weightGrams : $product->weightGrams(),
+            $this->actor->get(),
         );
 
         $previous = $context['previous_data'] ?? null;

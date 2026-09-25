@@ -17,6 +17,16 @@ const preview = {
   ],
 };
 
+/** Import requests get `responses` in turn (the last one repeats); the import history is empty. */
+function answer(...responses) {
+  const queue = [...responses];
+  api.mockImplementation((path) =>
+    Promise.resolve(path.startsWith('/api/import-runs') ? { member: [], totalItems: 0 } : queue.length > 1 ? queue.shift() : queue[0]),
+  );
+}
+
+const importCalls = () => api.mock.calls.filter(([path]) => path.startsWith('/api/order-imports'));
+
 async function chooseFile(label = 'Choose file') {
   const file = new File(['orderReference;customerName\n'], 'orders.csv', { type: 'text/csv' });
   fireEvent.change(await screen.findByLabelText(label), { target: { files: [file] } });
@@ -40,13 +50,13 @@ describe('the order import page', () => {
   });
 
   it('previews the file, listing the rows of every order that fails', async () => {
-    api.mockResolvedValue(preview);
+    answer(preview);
     renderAt('/orders/import');
 
     const file = await chooseFile();
 
     expect(await screen.findByText('Preview: nothing has been imported yet')).toBeTruthy();
-    expect(api).toHaveBeenCalledWith('/api/order-imports?dryRun=true', expect.objectContaining({ method: 'POST', body: file }));
+    expect(importCalls()).toEqual([['/api/order-imports?dryRun=true&filename=orders.csv', expect.objectContaining({ method: 'POST', body: file })]]);
     expect(screen.getByText('Already imported')).toBeTruthy();
 
     const problems = screen.getByRole('region', { name: 'Problems (2)' });
@@ -78,14 +88,14 @@ describe('the order import page', () => {
   });
 
   it('imports the orders the preview would create', async () => {
-    api.mockResolvedValueOnce(preview).mockResolvedValueOnce({ ...preview, dryRun: false });
+    answer(preview, { ...preview, dryRun: false, importRunId: 'run-1' });
     renderAt('/orders/import');
 
     const file = await chooseFile();
     fireEvent.click(await screen.findByRole('button', { name: 'Import 1 orders' }));
 
     expect(await screen.findByText('Import finished')).toBeTruthy();
-    expect(api).toHaveBeenLastCalledWith('/api/order-imports?dryRun=false', expect.objectContaining({ body: file }));
+    expect(importCalls().at(-1)).toEqual(['/api/order-imports?dryRun=false&filename=orders.csv', expect.objectContaining({ body: file })]);
     expect(screen.getByRole('link', { name: 'Go to orders' })).toBeTruthy();
   });
 

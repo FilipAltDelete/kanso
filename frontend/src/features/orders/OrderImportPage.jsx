@@ -24,6 +24,16 @@ export function OrderImportPage() {
       firstTranslation(t, [`orderImport.error.${error.field}.${error.code}`, `orderImport.error.${error.code}`, `violation.${error.code}`, `import.error.${error.code}`], error.message),
     [t],
   );
+  const counts = useCallback(
+    (result) => [
+      { key: 'rows', label: t('import.count.rows'), value: result.rows },
+      { key: 'orders', label: t('orderImport.count.orders'), value: result.orders },
+      { key: 'created', label: t(result.dryRun ? 'orderImport.count.toCreate' : 'orderImport.count.created'), value: result.created, tone: 'green' },
+      { key: 'existing', label: t('orderImport.count.existing'), value: result.existing },
+      { key: 'failed', label: t('orderImport.count.failed'), value: result.failed, tone: result.failed > 0 ? 'red' : 'slate' },
+    ],
+    [t],
+  );
 
   return (
     <CsvImportPage
@@ -34,13 +44,7 @@ export function OrderImportPage() {
       canImport={canImport}
       preview={preview}
       run={run}
-      counts={(result) => [
-        { key: 'rows', label: t('import.count.rows'), value: result.rows },
-        { key: 'orders', label: t('orderImport.count.orders'), value: result.orders },
-        { key: 'created', label: t(result.dryRun ? 'orderImport.count.toCreate' : 'orderImport.count.created'), value: result.created, tone: 'green' },
-        { key: 'existing', label: t('orderImport.count.existing'), value: result.existing },
-        { key: 'failed', label: t('orderImport.count.failed'), value: result.failed, tone: result.failed > 0 ? 'red' : 'slate' },
-      ]}
+      counts={counts}
       changes={(result) => result.created}
       runLabel={(count) => t('orderImport.run', { count })}
       format={[t('orderImport.formatRows'), t('orderImport.formatRequired'), t('orderImport.formatOptional'), t('orderImport.formatAnnotations'), t('orderImport.formatPrices'), t('orderImport.formatAgain')]}
@@ -54,6 +58,7 @@ export function OrderImportPage() {
       }}
       errorColumns={errorColumns}
       problem={problem}
+      history="orders"
     />
   );
 }

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { FileUp, Plus, Tag, X } from 'lucide-react';
+import { ArrowRightLeft, FileUp, Plus, Tag, X } from 'lucide-react';
 import { AWAITING_FULFILLMENT, ORDER_STATUSES, PAYMENT_STATUSES, useChannels, useOrders, useOrderTags } from '../../api/orders.js';
 import { ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
 import { BulkTagDialog } from './BulkTagDialog.jsx';
+import { BulkTransitionDialog } from './BulkTransitionDialog.jsx';
 import { useOrderListShortcuts } from './orderShortcuts.js';
 import { PaymentBadge, StatusBadge, TagList, useCanOperate, useDateTime } from './shared.jsx';
 
@@ -28,6 +29,8 @@ export function OrderListPage() {
   const tags = useOrderTags();
   // The bulk tag dialog: { mode: 'add' | 'remove', ids, clear } while open.
   const [tagging, setTagging] = useState(null);
+  // The bulk status dialog: { ids, rows, clear } while open.
+  const [moving, setMoving] = useState(null);
   const [notice, setNotice] = useState('');
   useOrderListShortcuts({ canOperate, onNothingSelected: () => setNotice(t('shortcuts.orders.selectFirst')) });
 
@@ -114,6 +117,7 @@ export function OrderListPage() {
     () =>
       canOperate
         ? [
+            { id: 'change-status', label: t('bulkTransition.open'), icon: ArrowRightLeft, onClick: ({ ids, rows, clear }) => setMoving({ ids, rows, clear }) },
             { id: 'add-tag', label: t('orders.bulk.addTag'), icon: Tag, onClick: ({ ids, clear }) => setTagging({ mode: 'add', ids, clear }) },
             { id: 'remove-tag', label: t('orders.bulk.removeTag'), icon: X, onClick: ({ ids, clear }) => setTagging({ mode: 'remove', ids, clear }) },
           ]
@@ -169,6 +173,19 @@ export function OrderListPage() {
         onRowActivate={(order) => navigate({ to: '/orders/$orderId', params: { orderId: order.id } })}
         emptyMessage={t('orders.empty')}
       />
+
+      {moving ? (
+        <BulkTransitionDialog
+          ids={moving.ids}
+          rows={moving.rows}
+          onClose={() => setMoving(null)}
+          onDone={(result) => {
+            const number = (value) => new Intl.NumberFormat(locale).format(value);
+            setNotice(t('bulkTransition.done', { transition: t(`orderTransition.${result.transition}`), moved: number(result.moved.length), failed: number(result.failed.length) }));
+            moving.clear();
+          }}
+        />
+      ) : null}
 
       {tagging ? (
         <BulkTagDialog
