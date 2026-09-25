@@ -1,5 +1,6 @@
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, Dialog } from '../components/ui/primitives.jsx';
+import { useIsFrontTab } from './frontTab.js';
 import { useI18n } from './i18n.jsx';
 import { createMatcher, isShortcutEvent, loadShortcutsEnabled, saveShortcutsEnabled, SHORTCUT_GROUPS, SHORTCUTS } from './shortcuts.js';
 
@@ -74,10 +75,12 @@ export function ShortcutsProvider({ children }) {
  * Says what shortcuts do on this page, as `{ [id]: handler }` with ids from
  * SHORTCUTS; a missing or undefined handler leaves that shortcut off. A
  * handler that returns `false` did nothing, and the key goes to the browser.
- * Outside a ShortcutsProvider it does nothing.
+ * Outside a ShortcutsProvider it does nothing, and so does a page in a tab
+ * that is not in front (app/workspace keeps those mounted).
  */
 export function useShortcuts(map) {
   const context = useContext(ShortcutsContext);
+  const front = useIsFrontTab();
   const latest = useRef(map);
   useLayoutEffect(() => {
     latest.current = map;
@@ -86,7 +89,7 @@ export function useShortcuts(map) {
     .filter((id) => typeof map[id] === 'function')
     .sort()
     .join(' ');
-  const register = context?.register;
+  const register = front ? context?.register : undefined;
 
   useEffect(() => {
     if (!register || !ids) return undefined;

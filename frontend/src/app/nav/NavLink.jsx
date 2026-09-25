@@ -1,7 +1,7 @@
-import { Link } from '@tanstack/react-router';
 import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { cn } from '../../lib/utils.js';
+import { useWorkspace } from '../workspace/WorkspaceProvider.jsx';
 
 const row = 'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100';
 
@@ -10,17 +10,43 @@ const row = 'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-
  * becomes the tooltip and the accessible name, and a count stays as a dot of
  * a number on the icon so folding the menu hides nothing that needs work.
  * A page inside a folder (`nested`) shows its icon on the rail only.
+ *
+ * A click brings the page's tab forward, or opens one (app/workspace);
+ * ctrl-, cmd- or middle-click always opens another, behind the one in front,
+ * the way to have the same list open twice with different filters. Dragged
+ * onto the workspace it opens where it is dropped: in a tab bar, in a pane,
+ * or beside a pane as a split.
  */
 export function NavLink({ href, icon: Icon, active, collapsed = false, nested = false, count = 0, countTitle, children }) {
+  const { open, setDragging } = useWorkspace();
+
   return (
-    <Link
-      to={href}
-      // The router's own marking on an exact match only, where it agrees with `active`.
-      activeOptions={{ exact: true, includeSearch: false }}
+    <a
+      href={href}
+      draggable
       aria-current={active ? 'page' : undefined}
       title={collapsed ? children : undefined}
       aria-label={collapsed ? children : undefined}
       className={cn(row, collapsed && 'relative justify-center px-0', active && 'bg-slate-100 font-medium text-slate-900')}
+      onClick={(event) => {
+        if (event.button !== 0 || event.altKey || event.shiftKey) return;
+        event.preventDefault();
+        const newTab = event.ctrlKey || event.metaKey;
+        open(href, { newTab, background: newTab });
+      }}
+      onAuxClick={(event) => {
+        if (event.button !== 1) return;
+        event.preventDefault();
+        open(href, { newTab: true, background: true });
+      }}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'copy';
+        const url = new URL(href, window.location.origin).href;
+        event.dataTransfer.setData('text/uri-list', url);
+        event.dataTransfer.setData('text/plain', url);
+        setDragging({ href });
+      }}
+      onDragEnd={() => setDragging(null)}
     >
       {Icon && (collapsed || !nested) ? <Icon aria-hidden="true" className="size-4 shrink-0 text-slate-400" /> : null}
       {collapsed ? (
@@ -35,7 +61,7 @@ export function NavLink({ href, icon: Icon, active, collapsed = false, nested = 
           ) : null}
         </>
       )}
-    </Link>
+    </a>
   );
 }
 

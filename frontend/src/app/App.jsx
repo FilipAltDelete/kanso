@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider } from '@tanstack/react-router';
 import { ApiError } from '../api/client.js';
 import { Spinner } from '../components/ui/primitives.jsx';
 import { AuthProvider, useAuth } from '../features/auth/AuthProvider.jsx';
 import { LoginPage } from '../features/auth/LoginPage.jsx';
 import { I18nProvider, useI18n } from '../lib/i18n.jsx';
-import { router } from './router.jsx';
+import { ShortcutsProvider } from '../lib/ShortcutsProvider.jsx';
+import { Layout } from './Layout.jsx';
+import { WorkspaceProvider } from './workspace/WorkspaceProvider.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,7 +30,7 @@ export function App() {
 }
 
 function Gate() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const { t } = useI18n();
 
   if (status === 'restoring') {
@@ -42,5 +43,12 @@ function Gate() {
 
   if (status !== 'authenticated') return <LoginPage />;
 
-  return <RouterProvider router={router} />;
+  // Keyed by user: signing in as someone else starts from their tabs, not the last person's.
+  return (
+    <WorkspaceProvider key={user?.id} userId={user?.id ?? 'anonymous'}>
+      <ShortcutsProvider>
+        <Layout />
+      </ShortcutsProvider>
+    </WorkspaceProvider>
+  );
 }

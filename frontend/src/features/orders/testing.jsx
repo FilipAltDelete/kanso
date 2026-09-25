@@ -1,18 +1,21 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
-import { router as appRouter } from '../../app/router.jsx';
+import { Layout } from '../../app/Layout.jsx';
+import { buildRouteTree } from '../../app/router.jsx';
+import { WorkspaceProvider } from '../../app/workspace/WorkspaceProvider.jsx';
 import { I18nProvider } from '../../lib/i18n.jsx';
+import { ShortcutsProvider } from '../../lib/ShortcutsProvider.jsx';
 import { AuthContext } from '../auth/AuthProvider.jsx';
 
 export const operator = { id: 'u1', email: 'olle@example.com', name: 'Olle', roles: ['ROLE_OPERATOR'] };
 export const viewer = { id: 'u2', email: 'vera@example.com', name: 'Vera', roles: ['ROLE_VIEWER'] };
 
-/** The app's routes at `url`, signed in as `user`, with the API module mocked by the caller. */
+/** The app's pages at `url`, as one workspace tab (with the app's shortcuts), signed in as `user`, with the API module mocked by the caller. */
 export function renderAt(url, { user = operator, locale = 'en' } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
-    routeTree: appRouter.routeTree,
+    routeTree: buildRouteTree(),
     history: createMemoryHistory({ initialEntries: [url] }),
     scrollRestoration: false,
   });
@@ -21,13 +24,40 @@ export function renderAt(url, { user = operator, locale = 'en' } = {}) {
     <I18nProvider locale={locale}>
       <QueryClientProvider client={queryClient}>
         <AuthContext.Provider value={{ status: 'authenticated', user, login: vi.fn(), logout: vi.fn() }}>
-          <RouterProvider router={router} />
+          <ShortcutsProvider>
+            <RouterProvider router={router} />
+          </ShortcutsProvider>
         </AuthContext.Provider>
       </QueryClientProvider>
     </I18nProvider>,
   );
 
   return router;
+}
+
+/**
+ * The whole app at `url` — menu, tabs and shortcuts — for what the shell
+ * does. The address bar follows the tab in front, so `window.location` is
+ * where the person is.
+ */
+export function renderApp(url, { user = operator, locale = 'en' } = {}) {
+  window.localStorage.removeItem(`kanso.workspace.${user.id}`);
+  window.history.replaceState(null, '', url);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  render(
+    <I18nProvider locale={locale}>
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={{ status: 'authenticated', user, login: vi.fn(), logout: vi.fn() }}>
+          <WorkspaceProvider userId={user.id}>
+            <ShortcutsProvider>
+              <Layout />
+            </ShortcutsProvider>
+          </WorkspaceProvider>
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    </I18nProvider>,
+  );
 }
 
 export function orderFixture(overrides = {}) {

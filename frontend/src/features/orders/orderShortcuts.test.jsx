@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { api } from '../../api/client.js';
-import { channelsFixture, orderFixture, renderAt, viewer } from './testing.jsx';
+import { channelsFixture, orderFixture, renderApp, renderAt, viewer } from './testing.jsx';
 
 vi.mock('../../api/client.js', () => ({ api: vi.fn(), ApiError: class extends Error {} }));
 
@@ -66,22 +66,23 @@ describe('keyboard shortcuts on the order pages', () => {
       expect(screen.getByRole('dialog', { name: 'Add a tag to the selected orders (1)' })).toBeTruthy();
     });
 
-    it('goes places with g and a letter', async () => {
+    it('goes places with g and a letter, as tabs', async () => {
       answer();
-      const router = renderAt('/orders');
+      renderApp('/orders');
       await screen.findByRole('link', { name: '10001' });
 
       press('g');
       press('p');
-      await waitFor(() => expect(router.state.location.pathname).toBe('/products'));
+      await waitFor(() => expect(window.location.pathname).toBe('/products'));
       press('g');
       press('o');
-      await waitFor(() => expect(router.state.location.pathname).toBe('/orders'));
+      await waitFor(() => expect(window.location.pathname).toBe('/orders'));
+      expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Orders', 'Products']);
     });
 
     it('jumps to the search with /', async () => {
       answer();
-      renderAt('/orders');
+      renderApp('/orders');
       await screen.findByRole('link', { name: '10001' });
 
       press('/');
@@ -104,7 +105,7 @@ describe('keyboard shortcuts on the order pages', () => {
 
     it('opens the list of shortcuts from the menu', async () => {
       answer();
-      renderAt('/orders');
+      renderApp('/orders');
       await screen.findByRole('link', { name: '10001' });
 
       fireEvent.click(screen.getByRole('button', { name: 'Keyboard shortcuts' }));

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { FrontTabProvider } from './frontTab.js';
 import { I18nProvider } from './i18n.jsx';
 import { ShortcutsProvider, useShortcutHelp, useShortcuts } from './ShortcutsProvider.jsx';
 
@@ -145,5 +146,33 @@ describe('keyboard shortcuts', () => {
     // The help still opens from its button, to switch them back on.
     fireEvent.click(screen.getByRole('button', { name: 'Help' }));
     expect(screen.getByRole('checkbox', { name: 'Single-key shortcuts' }).checked).toBe(false);
+  });
+});
+
+describe('shortcuts in workspace tabs', () => {
+  it('go to the page in the tab in front, never to one hidden behind it', () => {
+    // Earlier tests switch the shortcuts off, and that is remembered.
+    localStorage.clear();
+    const inFront = vi.fn();
+    const behind = vi.fn();
+
+    render(
+      <I18nProvider locale="en">
+        <ShortcutsProvider>
+          <FrontTabProvider value>
+            <Page handlers={{ 'orders.new': inFront }} />
+          </FrontTabProvider>
+          {/* Mounted later, so without the check its handler would win. */}
+          <FrontTabProvider value={false}>
+            <Page handlers={{ 'orders.new': behind }} />
+          </FrontTabProvider>
+        </ShortcutsProvider>
+      </I18nProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { key: 'n' });
+
+    expect(inFront).toHaveBeenCalledTimes(1);
+    expect(behind).not.toHaveBeenCalled();
   });
 });

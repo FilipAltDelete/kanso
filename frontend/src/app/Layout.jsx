@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   Keyboard,
   LayoutDashboard,
@@ -21,6 +20,9 @@ import { useShortcutHelp, useShortcuts } from '../lib/ShortcutsProvider.jsx';
 import { cn } from '../lib/utils.js';
 import { LanguageSelect } from './LanguageSelect.jsx';
 import { NavFolder, NavLink } from './nav/NavLink.jsx';
+import { Workspace } from './workspace/Workspace.jsx';
+import { useWorkspace } from './workspace/WorkspaceProvider.jsx';
+import { pathOf } from './workspace/workspace.js';
 import { activeHref, loadCollapsed, loadFolders, saveCollapsed, saveFolders } from './nav/navState.js';
 
 /** The pages of each folder; the icons are what the collapsed rail shows. */
@@ -47,8 +49,8 @@ const HREFS = ['/', '/orders', '/customers', '/settings', ...FOLDERS.flatMap((fo
 export function Layout() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const active = activeHref(pathname, HREFS);
+  const { current } = useWorkspace();
+  const active = current ? activeHref(pathOf(current.href), HREFS) : null;
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [folders, setFolders] = useState(loadFolders);
   // Hiding a link is a courtesy; the API's voters are what refuse.
@@ -215,18 +217,17 @@ export function Layout() {
         </div>
       </nav>
 
-      {/* A flex column, so a list page can fill it and let only its table scroll (DataTable `fill`). */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-4 md:p-6">
-        <Outlet />
+      <main className="flex min-w-0 flex-1 flex-col">
+        <Workspace />
       </main>
     </div>
   );
 }
 
-/** Shortcuts that work on every page: going places, and jumping to the page's search. */
+/** Shortcuts that work on every page: going places (a tab, brought forward or opened), and jumping to the page's search. */
 function useGlobalShortcuts() {
-  const navigate = useNavigate();
-  const go = (to) => () => navigate({ to });
+  const { open } = useWorkspace();
+  const go = (to) => () => open(to);
 
   useShortcuts({
     goDashboard: go('/'),
@@ -235,7 +236,8 @@ function useGlobalShortcuts() {
     goCustomers: go('/customers'),
     goLocations: go('/locations'),
     search: () => {
-      const field = document.querySelector('main input[type="search"]');
+      // The page in front, not a tab hidden behind it or a page in another pane.
+      const field = document.querySelector('[data-front-tab] input[type="search"]');
       if (!field) return false;
       field.focus();
       field.select();
