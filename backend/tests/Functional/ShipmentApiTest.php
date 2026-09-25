@@ -204,6 +204,18 @@ final class ShipmentApiTest extends WebTestCase
         self::assertSame('reopen', $reopened['events'][array_key_last($reopened['events'])]['transition']);
     }
 
+    public function testAVoidedShipmentDoesNotCountAsShippedOnItsDay(): void
+    {
+        $order = $this->ship($this->confirmed([[$this->tee, 2]]), [[0, 1]]);
+        $today = new \DateTimeImmutable('today')->format('Y-m-d');
+        $shippedToday = fn (): array => array_column($this->api('GET', '/api/orders?shippedFrom='.$today.'&q='.$order['number'])['member'], 'number');
+        self::assertSame([$order['number']], $shippedToday());
+
+        $this->api('POST', \sprintf('/api/orders/%s/shipments/%s/void', $order['id'], $order['shipments'][0]['id']), ['version' => $order['version']]);
+
+        self::assertSame([], $shippedToday(), 'It never left.');
+    }
+
     public function testADeliveredOrdersShipmentCannotBeVoided(): void
     {
         $shipped = $this->ship($this->confirmed([[$this->tee, 1]]), [[0, 1]]);

@@ -123,7 +123,8 @@ final class OrderRepository implements OrderStoreInterface
         }
         if (null !== $query->shippedFrom || null !== $query->shippedBefore) {
             // One shipment in the range is enough: a partly shipped order shipped that day too.
-            $shipped = 'SELECT 1 FROM '.Shipment::class.' s WHERE s.order = o';
+            // A voided shipment never left, so it does not count.
+            $shipped = 'SELECT 1 FROM '.Shipment::class.' s WHERE s.order = o AND s.voidedAt IS NULL';
             if (null !== $query->shippedFrom) {
                 $shipped .= ' AND s.shippedAt >= :shippedFrom';
                 $builder->setParameter('shippedFrom', $query->shippedFrom);

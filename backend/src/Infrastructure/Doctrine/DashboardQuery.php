@@ -52,9 +52,9 @@ final class DashboardQuery implements DashboardQueryInterface
 
         // Orders with a parcel out today, counted once each however many they
         // had: a partly shipped order was shipped today too. The day of the
-        // shipment, not the day the order was placed.
+        // shipment, not the day the order was placed. A voided shipment never left.
         $shippedToday = (int) $this->connection->fetchOne(
-            'SELECT COUNT(DISTINCT order_id) FROM shipment WHERE shipped_at >= ? AND shipped_at < ?',
+            'SELECT COUNT(DISTINCT order_id) FROM shipment WHERE shipped_at >= ? AND shipped_at < ? AND voided_at IS NULL',
             [$from, $to],
         );
 
