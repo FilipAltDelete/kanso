@@ -32,3 +32,18 @@ Phase 1 needs orders imported from CSV (ROADMAP.md), for example an export from 
 - **`note`** becomes one note of at most 2000 characters (`too_long`).
 - **Set in the transaction that creates the order, through the order's own methods.** `OrderService::create()` takes an optional callback that runs on the new order inside its transaction, and the importer uses it to call `changePaymentStatus`, `changeTags` and `addNote`. The order therefore has its `created` event (as `unpaid`), then `payment_status_changed`, `tags_changed` and `note`, all with the creation time. `unpaid` and empty cells write nothing. A problem with any of the three is found before anything is written, in the preview too, and skips the order whole like any other.
 - Idempotency is unchanged: an order the channel already has is `existing` and left alone, so a changed payment status, tags or note in a re-imported file is not applied. Changing them is the order page's job.
+
+## Amended 2026-09-25: linking imported orders to customer records
+
+Phase 1 promises customer records with order history, but only orders entered by hand named a customer (`customer.id`). A merchant who imported their orders got customer pages with no orders.
+
+- **Matched on `customerEmail`, ignoring case**, like the customer's own unique key (`email_canonical`). An order with an email is linked to the customer that has it. An order without one is not linked. Names and addresses are never used to match, because they are not unique.
+- **A customer is created when none has the email**, rather than the order left unlinked. Leaving it unlinked would keep the history empty for exactly the merchants this is for, and the email is already the customer's identity. The new customer gets the order's `customerName` and `customerEmail`, both as the first order of the file with that email wrote them, and no phone or addresses: the order keeps its own shipping address. Its `created` event names the importing user. An email longer than a customer's 180 characters (an order allows 255) creates no customer, and the order is left unlinked.
+- **An existing customer is not changed.** If the file gives another name for the same email, the order keeps the file's name, and the customer record keeps its own. Changing a customer is the customer page's job.
+- **Only for an order that is created.** The order is checked first, then the customer is created in its own transaction (customer and event together), then the order is created. An order that fails its checks leaves no customer behind. An order the channel already has (`existing`) is not touched and creates no customer, so importing the same file twice creates no second customer and links nothing twice. If another import or an operator creates a customer with the same email in between, the importer links the order to that customer.
+- **Counted as `newCustomers`** in the result, the preview included ("New customers"). Several orders with the same email count once. The count is also stored in the import history.
+
+Consequences:
+
+- Customer and order are two transactions, not one. If the order's own write fails after the customer was created (a race on the reference, reported as `taken`), a customer with no orders is left. It is a real buyer from the file, and the next import links to it.
+- Orders imported before this amendment stay unlinked. Nothing links them afterwards.

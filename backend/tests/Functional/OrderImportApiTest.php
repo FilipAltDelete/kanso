@@ -172,6 +172,51 @@ final class OrderImportApiTest extends WebTestCase
         self::assertSame('partially_refunded', $this->orderByReference('WEB-6')['paymentStatus']);
     }
 
+    public function testOrdersAreLinkedToTheCustomerWithTheirEmailAndTheSameFileTwiceDuplicatesNothing(): void
+    {
+        $anna = (string) $this->api('POST', '/api/customers', ['email' => 'anna@example.com', 'name' => 'Anna Andersson'])['id'];
+        $csv = self::HEADER
+            ."WEB-1;Anna A;ANNA@example.com;Storgatan 1;111 22;Stockholm;SE;TEE-1;;1;100\n"
+            ."WEB-2;Bo Berg;bo@example.com;Kungsgatan 2;411 19;Göteborg;SE;TEE-1;;1;100\n"
+            ."WEB-2;;;;;;;MUG-1;;1;50\n"
+            ."WEB-3;Bo Berg;Bo@Example.com;Kungsgatan 2;411 19;Göteborg;SE;MUG-1;;2;50\n"
+            ."WEB-4;Cia;;Vägen 3;123 45;Malmö;SE;MUG-1;;1;50\n";
+
+        $preview = $this->upload($csv, dryRun: true);
+        self::assertSame([4, 1], [$preview['created'], $preview['newCustomers']]);
+        self::assertSame(1, $this->api('GET', '/api/customers')['totalItems']);
+
+        $result = $this->upload($csv);
+        self::assertSame([4, 1], [$result['created'], $result['newCustomers']]);
+
+        $customers = $this->api('GET', '/api/customers');
+        self::assertSame(2, $customers['totalItems']);
+        $bo = array_column($customers['member'], 'id', 'email')['bo@example.com'] ?? null;
+        self::assertIsString($bo, 'Bo is created with the email as the first order wrote it.');
+        self::assertSame('Bo Berg', $this->api('GET', '/api/customers/'.$bo)['name']);
+
+        self::assertSame($anna, $this->orderByReference('WEB-1')['customer']['id']);
+        self::assertSame('Anna A', $this->orderByReference('WEB-1')['customer']['name'], 'The order keeps the name the file gave it.');
+        self::assertNull($this->orderByReference('WEB-4')['customer']['id'] ?? null, 'An order without an email is not linked.');
+        self::assertSame(['WEB-2', 'WEB-3'], $this->referencesOf($bo));
+        self::assertSame(['WEB-1'], $this->referencesOf($anna));
+
+        $again = $this->upload($csv);
+
+        self::assertSame([0, 4, 0], [$again['created'], $again['existing'], $again['newCustomers']]);
+        self::assertSame(2, $this->api('GET', '/api/customers')['totalItems']);
+        self::assertSame(['WEB-2', 'WEB-3'], $this->referencesOf($bo));
+        self::assertSame(['WEB-1'], $this->referencesOf($anna));
+    }
+
+    public function testAFailedOrderCreatesNoCustomer(): void
+    {
+        $result = $this->upload(self::HEADER."WEB-1;Bo Berg;bo@example.com;Kungsgatan 2;411 19;Göteborg;SE;NOPE;;1;100\n");
+
+        self::assertSame([0, 1, 0], [$result['created'], $result['failed'], $result['newCustomers']]);
+        self::assertSame(0, $this->api('GET', '/api/customers')['totalItems']);
+    }
+
     public function testAViewerCannotImport(): void
     {
         $this->signInAs(Role::VIEWER);
@@ -188,6 +233,15 @@ final class OrderImportApiTest extends WebTestCase
         self::assertSame(1, $page['totalItems']);
 
         return $this->api('GET', '/api/orders/'.$page['member'][0]['id']);
+    }
+
+    /** @return list<string> the external references of the customer's orders, sorted */
+    private function referencesOf(string $customerId): array
+    {
+        $references = array_column($this->api('GET', '/api/orders?customer='.$customerId)['member'], 'externalReference');
+        sort($references);
+
+        return $references;
     }
 
     /** @return array<mixed> */

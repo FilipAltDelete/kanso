@@ -92,7 +92,7 @@ final class CustomerService
 
         if ('' === $email) {
             $violations->add('email', 'An email is required.', 'required');
-        } elseif (mb_strlen($email) > 180 || false === filter_var($email, \FILTER_VALIDATE_EMAIL, \FILTER_FLAG_EMAIL_UNICODE)) {
+        } elseif (mb_strlen($email) > Customer::MAX_EMAIL_LENGTH || false === filter_var($email, \FILTER_VALIDATE_EMAIL, \FILTER_FLAG_EMAIL_UNICODE)) {
             $violations->add('email', 'This is not a valid email address.', 'invalid_email');
         } else {
             $existing = $this->customers->findByEmail($email);

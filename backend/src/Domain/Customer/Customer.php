@@ -18,14 +18,16 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'customer')]
 class Customer
 {
+    public const int MAX_EMAIL_LENGTH = 180;
+
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME)]
     private Uuid $id;
 
-    #[ORM\Column(length: 180)]
+    #[ORM\Column(length: self::MAX_EMAIL_LENGTH)]
     private string $email;
 
-    #[ORM\Column(name: 'email_canonical', length: 180, unique: true)]
+    #[ORM\Column(name: 'email_canonical', length: self::MAX_EMAIL_LENGTH, unique: true)]
     private string $emailCanonical;
 
     #[ORM\Column(length: 255)]

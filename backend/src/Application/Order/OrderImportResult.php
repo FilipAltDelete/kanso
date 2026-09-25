@@ -23,6 +23,8 @@ final readonly class OrderImportResult
         public int $existing,
         public int $failed,
         public array $errors,
+        /** Customer records created for emails no customer had (ADR-0008); on a dry run, to be created. */
+        public int $newCustomers = 0,
     ) {
     }
 }

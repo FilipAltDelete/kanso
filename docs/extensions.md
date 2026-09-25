@@ -61,4 +61,4 @@ These come when the first real customer extension needs them. Pimsen shows the s
 - **`kanso/core-tests`**: the core's test kit and a conformance suite a project runs against its own build.
 - **`kanso:extensions:check`**: boots the container and reports rule violations (unreset services, entities on core tables).
 - **Frontend plugins**: customer pages and widgets compiled into the web bundle.
-- **Project images**: building the api, worker and web images from a customer project. This depends on the open deploy-target decision (ROADMAP.md, Phase 0).
+- **Project images**: building the api, worker and web images from a customer project. This depends on the deploy-target decision, which is deferred (ROADMAP.md, Phase 0).
