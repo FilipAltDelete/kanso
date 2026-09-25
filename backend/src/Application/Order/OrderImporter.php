@@ -406,7 +406,9 @@ final class OrderImporter
         if (1 !== preg_match('/^[A-Z]{3}$/', $currency)) {
             return 2;
         }
-        $digits = new \NumberFormatter('en@currency='.$currency, \NumberFormatter::CURRENCY)->getAttribute(\NumberFormatter::FRACTION_DIGITS);
+        // Not `new X()->method()`: valid PHP 8.4, but deptrac's parser cannot read it and skips the file.
+        $formatter = new \NumberFormatter('en@currency='.$currency, \NumberFormatter::CURRENCY);
+        $digits = $formatter->getAttribute(\NumberFormatter::FRACTION_DIGITS);
 
         return \is_int($digits) && $digits >= 0 ? $digits : 2;
     }
