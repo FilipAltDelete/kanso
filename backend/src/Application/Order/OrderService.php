@@ -58,9 +58,14 @@ final class OrderService
     }
 
     /**
-     * @param array<string, mixed> $input the create request body
+     * `$annotate` runs on the new order, with the creation time, in the
+     * transaction that writes it: how an import sets the payment status, tags
+     * and a note through the order's own methods (ADR-0008).
+     *
+     * @param array<string, mixed>                             $input    the create request body
+     * @param (callable(Order, \DateTimeImmutable): void)|null $annotate
      */
-    public function create(array $input, Actor $actor): Order
+    public function create(array $input, Actor $actor, ?callable $annotate = null): Order
     {
         $draft = $this->draft($input);
 
@@ -79,7 +84,12 @@ final class OrderService
         );
 
         try {
-            $this->transaction->run(fn () => $this->orders->add($order));
+            $this->transaction->run(function () use ($order, $annotate, $now): void {
+                if (null !== $annotate) {
+                    $annotate($order, $now);
+                }
+                $this->orders->add($order);
+            });
         } catch (ConcurrentModification $e) {
             // The unique key on (channel, external reference): created by
             // someone else between the check in draft() and this write.

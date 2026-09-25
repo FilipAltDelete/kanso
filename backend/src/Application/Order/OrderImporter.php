@@ -10,7 +10,10 @@ use Kanso\Core\Internal\Application\Import\CsvFile;
 use Kanso\Core\Internal\Domain\Common\Actor;
 use Kanso\Core\Internal\Domain\Order\Channel;
 use Kanso\Core\Internal\Domain\Order\ChannelStoreInterface;
+use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
+use Kanso\Core\Internal\Domain\Order\OrderTag;
+use Kanso\Core\Internal\Domain\Order\PaymentStatus;
 
 /**
  * Creates orders from a CSV file with one row per order line (ADR-0008,
@@ -28,6 +31,10 @@ use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
  * its own transaction. An order with any problem is skipped whole — never
  * created with some of its lines — and reported at the rows it came from.
  * A dry run checks everything and writes nothing: the preview.
+ *
+ * `paymentStatus`, `tags` (separated by "|") and `note` are order columns
+ * too. They are set on the new order in the transaction that creates it,
+ * through the order's own methods, so each writes its usual event.
  */
 final class OrderImporter
 {
@@ -52,7 +59,12 @@ final class OrderImporter
         'lineName' => 'lineName',
         'quantity' => 'quantity',
         'unitPrice' => 'unitPrice',
+        'paymentStatus' => 'paymentStatus',
+        'tags' => 'tags',
+        'note' => 'note',
     ];
+    /** Separates the tags in the `tags` column; not a comma, which the list filter uses. */
+    public const string TAG_SEPARATOR = '|';
     private const array REQUIRED = ['orderReference', 'customerName', 'shippingLine1', 'shippingPostalCode', 'shippingCity', 'shippingCountry', 'sku', 'quantity', 'unitPrice'];
     /** The columns that belong to a line; every other column belongs to the order. */
     private const array LINE_FIELDS = ['sku', 'lineName', 'quantity', 'unitPrice'];
@@ -121,12 +133,13 @@ final class OrderImporter
 
             $groupErrors = [];
             $input = $this->input($group, $groupErrors);
+            $annotations = self::annotations($group, $groupErrors);
             if ([] === $groupErrors) {
                 try {
                     if ($dryRun) {
                         $this->service->check($input);
                     } else {
-                        $this->service->create($input, $actor);
+                        $this->service->create($input, $actor, self::annotate($annotations, $actor));
                     }
                     ++$created;
                     continue;
@@ -245,6 +258,114 @@ final class OrderImporter
             ], static fn (?string $value): bool => null !== $value),
             'lines' => $lines,
         ], static fn (mixed $value): bool => null !== $value);
+    }
+
+    /**
+     * The payment status, tags and note the file gives the order, checked.
+     * Rows that disagree are already reported by input(); these come from the
+     * first row that fills them.
+     *
+     * @param array{reference: string, channel: string, rows: array<int, array<string, string>>}      $group
+     * @param list<array{row: int, reference: ?string, field: string, code: string, message: string}> $errors
+     *
+     * @return array{paymentStatus: ?PaymentStatus, tags: list<string>, note: ?string}
+     */
+    private static function annotations(array $group, array &$errors): array
+    {
+        $annotations = ['paymentStatus' => null, 'tags' => [], 'note' => null];
+        $reference = $group['reference'];
+
+        $first = self::first($group, 'paymentStatus');
+        if (null !== $first) {
+            [$row, $value] = $first;
+            $annotations['paymentStatus'] = PaymentStatus::tryFrom(strtolower(str_replace([' ', '-'], '_', $value)));
+            if (null === $annotations['paymentStatus']) {
+                $errors[] = self::error($row, $reference, 'paymentStatus', 'unknown_payment_status', \sprintf('Unknown payment status "%s"; one of: %s.', $value, implode(', ', PaymentStatus::values())));
+            }
+        }
+
+        $first = self::first($group, 'tags');
+        if (null !== $first) {
+            [$row, $value] = $first;
+            $tags = [];
+            foreach (explode(self::TAG_SEPARATOR, $value) as $name) {
+                if ('' === trim($name)) {
+                    continue; // "a||b" or a trailing separator
+                }
+                try {
+                    $name = OrderTag::normalize($name);
+                } catch (\InvalidArgumentException $e) {
+                    $errors[] = self::error($row, $reference, 'tags', 'tag', $e->getMessage().\sprintf(' Separate tags with "%s".', self::TAG_SEPARATOR));
+                    continue;
+                }
+                foreach ($tags as $tag) {
+                    if (OrderTag::same($tag, $name)) {
+                        continue 2;
+                    }
+                }
+                $tags[] = $name;
+            }
+            if (\count($tags) > Order::MAX_TAGS) {
+                $errors[] = self::error($row, $reference, 'tags', 'too_many_tags', \sprintf('An order has at most %d tags; this row gives %d.', Order::MAX_TAGS, \count($tags)));
+            }
+            $annotations['tags'] = $tags;
+        }
+
+        $first = self::first($group, 'note');
+        if (null !== $first) {
+            [$row, $value] = $first;
+            if (mb_strlen($value) > Order::MAX_NOTE_LENGTH) {
+                $errors[] = self::error($row, $reference, 'note', 'too_long', \sprintf('A note has at most %d characters.', Order::MAX_NOTE_LENGTH));
+            }
+            $annotations['note'] = $value;
+        }
+
+        return $annotations;
+    }
+
+    /**
+     * What create() runs on the new order in its transaction, or null when
+     * the file gives nothing to set. Unpaid, the default, writes no event.
+     *
+     * @param array{paymentStatus: ?PaymentStatus, tags: list<string>, note: ?string} $annotations
+     *
+     * @return (\Closure(Order, \DateTimeImmutable): void)|null
+     */
+    private static function annotate(array $annotations, Actor $actor): ?\Closure
+    {
+        if (null === $annotations['paymentStatus'] && [] === $annotations['tags'] && null === $annotations['note']) {
+            return null;
+        }
+
+        return static function (Order $order, \DateTimeImmutable $now) use ($annotations, $actor): void {
+            if (null !== $annotations['paymentStatus']) {
+                $order->changePaymentStatus($annotations['paymentStatus'], $actor, $now);
+            }
+            if ([] !== $annotations['tags']) {
+                $order->changeTags($annotations['tags'], [], $actor, $now);
+            }
+            if (null !== $annotations['note']) {
+                $order->addNote($annotations['note'], $actor, $now);
+            }
+        };
+    }
+
+    /**
+     * The first row of the order that fills a column, and its value.
+     *
+     * @param array{reference: string, channel: string, rows: array<int, array<string, string>>} $group
+     *
+     * @return array{int, string}|null
+     */
+    private static function first(array $group, string $field): ?array
+    {
+        foreach ($group['rows'] as $row => $values) {
+            if ('' !== ($values[$field] ?? '')) {
+                return [$row, $values[$field]];
+            }
+        }
+
+        return null;
     }
 
     /**

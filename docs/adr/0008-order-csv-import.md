@@ -23,3 +23,12 @@ Phase 1 needs orders imported from CSV (ROADMAP.md), for example an export from 
 - The preview (dry run) and the import are two reads. An order someone creates or a product someone deletes in between can make the import's counts differ from the preview's; the import's response is the record.
 - A reference cannot be reused within a channel, not even after the order is cancelled. That is what makes re-importing safe.
 - Imports create `pending` orders only. They are confirmed, and their stock reserved, through the normal transitions.
+
+## Amended 2026-09-28: payment status, tags and a note
+
+- **Three optional order columns: `paymentStatus`, `tags` and `note`** (ADR-0010). They are order columns like the customer's: taken from the first row that fills them, and a later row that fills one differently is `inconsistent`. The comparison is of the cell as written, so `a|b` and `b|a` disagree.
+- **`paymentStatus`** is one of `unpaid`, `authorized`, `paid`, `refunded`, `partially_refunded`, ignoring case, with a space or `-` read as `_`. Anything else is `unknown_payment_status`.
+- **`tags` are separated by `|`**, not by a comma, which the list filter uses and a tag may not contain. Each tag is trimmed, empty pieces are ignored, and the same tag twice (ignoring case) counts once. An invalid tag is `tag`, more than 20 is `too_many_tags`.
+- **`note`** becomes one note of at most 2000 characters (`too_long`).
+- **Set in the transaction that creates the order, through the order's own methods.** `OrderService::create()` takes an optional callback that runs on the new order inside its transaction, and the importer uses it to call `changePaymentStatus`, `changeTags` and `addNote`. The order therefore has its `created` event (as `unpaid`), then `payment_status_changed`, `tags_changed` and `note`, all with the creation time. `unpaid` and empty cells write nothing. A problem with any of the three is found before anything is written, in the preview too, and skips the order whole like any other.
+- Idempotency is unchanged: an order the channel already has is `existing` and left alone, so a changed payment status, tags or note in a re-imported file is not applied. Changing them is the order page's job.
