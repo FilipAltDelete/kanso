@@ -8,10 +8,9 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\State\ProcessorInterface;
 use Kanso\Core\Internal\Api\Resource\CustomerResource;
+use Kanso\Core\Internal\Api\Security\CurrentActor;
 use Kanso\Core\Internal\Application\Customer\CustomerInput;
 use Kanso\Core\Internal\Application\Customer\CustomerService;
-use Kanso\Core\Internal\Application\Security\ActorResolver;
-use Symfony\Bundle\SecurityBundle\Security;
 
 /**
  * Creates and updates customers through CustomerService, which validates and
@@ -23,8 +22,7 @@ final class CustomerProcessor implements ProcessorInterface
 {
     public function __construct(
         private readonly CustomerService $customers,
-        private readonly ActorResolver $actors,
-        private readonly Security $security,
+        private readonly CurrentActor $actor,
     ) {
     }
 
@@ -33,7 +31,7 @@ final class CustomerProcessor implements ProcessorInterface
         \assert($data instanceof CustomerResource);
 
         $input = new CustomerInput($data->email, $data->name, $data->phone, array_values($data->addresses));
-        $actor = $this->actors->resolve($this->security->getUser()?->getUserIdentifier());
+        $actor = $this->actor->get();
 
         $customer = $operation instanceof Patch
             ? $this->customers->update((string) ($uriVariables['id'] ?? ''), $input, $actor)

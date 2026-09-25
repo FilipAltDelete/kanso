@@ -33,6 +33,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
                 'placedFrom' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed at or after this instant (ISO 8601 with offset, or a date meaning UTC midnight).'),
                 'placedBefore' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed before this instant.'),
                 'q' => new QueryParameter(schema: ['type' => 'string'], description: 'Search the order number, customer name and customer email.'),
+                'customer' => new QueryParameter(schema: ['type' => 'string', 'format' => 'uuid'], description: 'Only orders linked to this customer record.'),
                 'sort' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated fields, "-" for descending: placedAt, number, total, customerName, status. Default -placedAt.'),
             ],
         ),

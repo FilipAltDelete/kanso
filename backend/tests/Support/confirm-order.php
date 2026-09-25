@@ -23,7 +23,10 @@ require dirname(__DIR__, 2).'/vendor/autoload.php';
 
 [, $orderId, $startAt] = $argv;
 
-$kernel = new Kernel('test', false);
+// Debug, like the test that starts it: that container is the one it just
+// rebuilt. A non-debug kernel never checks its cache, and would run whatever
+// code was compiled into it last.
+$kernel = new Kernel('test', true);
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
 assert($container instanceof ContainerInterface);

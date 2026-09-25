@@ -77,16 +77,20 @@ final class OrderApiTest extends WebTestCase
 
     public function testTheOrderCanNameItsCurrencyCustomerRecordAndPlacedTime(): void
     {
+        $this->request('POST', '/api/customers', $this->operator, ['name' => 'Bo', 'email' => 'bo-'.bin2hex(random_bytes(3)).'@example.com']);
+        self::assertResponseStatusCodeSame(201);
+        $customerId = $this->json()['id'];
+
         $order = $this->create([
             'currency' => 'EUR',
             'placedAt' => '2026-09-20T10:15:00+02:00',
-            'customer' => ['id' => '0192f1a4-7b6e-7c3d-9a1b-2c3d4e5f6a7b', 'name' => 'Bo'],
+            'customer' => ['id' => $customerId, 'name' => 'Bo'],
             'billingAddress' => ['line1' => 'Box 1', 'postalCode' => '111 11', 'city' => 'Stockholm', 'countryCode' => 'SE'],
         ]);
 
         self::assertSame('EUR', $order['currency']);
         self::assertSame('2026-09-20T08:15:00+00:00', $order['placedAt']);
-        self::assertSame('0192f1a4-7b6e-7c3d-9a1b-2c3d4e5f6a7b', $order['customer']['id']);
+        self::assertSame($customerId, $order['customer']['id']);
         self::assertSame('Box 1', $order['billingAddress']['line1']);
     }
 

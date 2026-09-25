@@ -23,6 +23,8 @@ final readonly class OrderQuery
         public array $sort = [['field' => 'placedAt', 'desc' => true]],
         public int $offset = 0,
         public int $limit = 50,
+        /** Only orders placed for this customer record (id). */
+        public ?string $customerId = null,
     ) {
     }
 }

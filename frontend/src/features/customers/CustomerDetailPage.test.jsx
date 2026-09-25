@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { anna, mockApi, renderCustomers } from './testing.jsx';
 
 describe('the customer page', () => {
@@ -40,5 +40,53 @@ describe('the customer page', () => {
     renderCustomers('/customers/nope');
 
     expect(await screen.findByText('This customer does not exist.')).toBeTruthy();
+  });
+
+  it("lists the customer's orders, newest first, and offers a new one to operators", async () => {
+    const calls = mockApi({
+      [`GET /api/customers/${anna.id}`]: anna,
+      [`GET /api/customers/${anna.id}/history`]: { member: [], totalItems: 0 },
+      'GET /api/orders': {
+        member: [
+          {
+            id: 'o2',
+            number: '10002',
+            status: 'confirmed',
+            channel: { code: 'manual', name: 'Manual' },
+            currency: 'SEK',
+            total: 19950,
+            customer: { id: anna.id, name: 'Anna Svensson', email: 'anna@example.com' },
+            lineCount: 1,
+            placedAt: '2026-09-22T10:00:00+00:00',
+            updatedAt: '2026-09-22T10:00:00+00:00',
+            version: 2,
+          },
+        ],
+        totalItems: 1,
+      },
+    });
+
+    renderCustomers(`/customers/${anna.id}`);
+
+    const orders = await screen.findByRole('table', { name: 'Orders' });
+    expect(within(orders).getByRole('link', { name: '10002' })).toBeTruthy();
+    expect(within(orders).getByText('Confirmed')).toBeTruthy();
+    const request = new URL(calls.find((call) => call.url.startsWith('/api/orders')).url, 'http://localhost').searchParams;
+    expect(request.get('customer')).toBe(anna.id);
+    expect(request.get('sort')).toBe('-placedAt');
+    expect(screen.getByRole('link', { name: 'New order' }).getAttribute('href')).toBe(`/orders/new?customer=${anna.id}`);
+  });
+
+  it('says so when the customer has no orders, and offers a viewer no new one', async () => {
+    mockApi({
+      [`GET /api/customers/${anna.id}`]: anna,
+      [`GET /api/customers/${anna.id}/history`]: { member: [], totalItems: 0 },
+      'GET /api/orders': { member: [], totalItems: 0 },
+    });
+
+    renderCustomers(`/customers/${anna.id}`, { roles: ['ROLE_VIEWER'] });
+
+    expect(await screen.findByText('No orders for this customer yet.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'New order' })).toBeNull();
   });
 });

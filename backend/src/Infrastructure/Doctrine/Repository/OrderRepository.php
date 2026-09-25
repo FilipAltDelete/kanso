@@ -12,6 +12,7 @@ use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderQuery;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
+use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
 final class OrderRepository implements OrderStoreInterface
@@ -63,6 +64,9 @@ final class OrderRepository implements OrderStoreInterface
         if ([] !== $query->statuses) {
             $builder->andWhere('o.status IN (:statuses)')
                 ->setParameter('statuses', array_map(static fn (OrderStatus $status): string => $status->value, $query->statuses));
+        }
+        if (null !== $query->customerId) {
+            $builder->andWhere('o.customerId = :customer')->setParameter('customer', Uuid::fromString($query->customerId), UuidType::NAME);
         }
         if ([] !== $query->channels) {
             $builder->andWhere('c.code IN (:channels)')->setParameter('channels', $query->channels);

@@ -105,12 +105,12 @@ final class CustomerApiTest extends WebTestCase
         }
         $this->send('POST', '/api/customers', ['email' => 'x-'.$marker.'@example.com', 'name' => 'By email only']);
 
-        $byName = $this->send('GET', '/api/customers?q='.strtoupper($marker).'&order[name]=asc&itemsPerPage=2');
+        $byName = $this->send('GET', '/api/customers?q='.strtoupper($marker).'&sort=name&itemsPerPage=2');
         self::assertResponseIsSuccessful();
         self::assertSame(4, $byName['totalItems']);
         self::assertSame(['Anders '.$marker, 'Björn '.$marker], array_column($byName['member'], 'name'));
 
-        $page2 = $this->send('GET', '/api/customers?q='.$marker.'&order[name]=asc&itemsPerPage=2&page=2');
+        $page2 = $this->send('GET', '/api/customers?q='.$marker.'&sort=name&itemsPerPage=2&page=2');
         self::assertSame(['By email only', 'Cecilia '.$marker], array_column($page2['member'], 'name'));
 
         $byEmail = $this->send('GET', '/api/customers?q=X-'.$marker);
@@ -119,7 +119,7 @@ final class CustomerApiTest extends WebTestCase
 
     public function testAnUnknownSortIsRefused(): void
     {
-        $this->send('GET', '/api/customers?order[password]=asc');
+        $this->send('GET', '/api/customers?sort=password');
 
         self::assertResponseStatusCodeSame(422);
     }
@@ -228,7 +228,7 @@ final class CustomerApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(201);
         $id = $this->json()['id'];
 
-        self::assertSame('API key: Shopify sync', $this->send('GET', '/api/customers/'.$id.'/history')['member'][0]['actor']);
+        self::assertSame('Shopify sync', $this->send('GET', '/api/customers/'.$id.'/history')['member'][0]['actor']);
     }
 
     /**

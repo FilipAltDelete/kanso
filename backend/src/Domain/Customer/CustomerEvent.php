@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Kanso\Core\Internal\Domain\Customer;
 
 use Doctrine\ORM\Mapping as ORM;
-use Kanso\Core\Internal\Domain\Security\Actor;
+use Kanso\Core\Internal\Domain\Common\Actor;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
@@ -53,7 +53,7 @@ class CustomerEvent
         $this->customerId = $customerId;
         $this->type = $type;
         $this->actorId = $actor->id;
-        $this->actorLabel = $actor->label;
+        $this->actorLabel = $actor->name;
         $this->changes = $changes;
         $this->occurredAt = $occurredAt;
     }

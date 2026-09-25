@@ -15,7 +15,7 @@ describe('the customer list', () => {
     await waitFor(() => expect(calls.length).toBeGreaterThan(0));
     const params = new URL(calls.at(-1).url, 'http://localhost').searchParams;
     expect(params.get('q')).toBe('anna');
-    expect(params.get('order[name]')).toBe('asc');
+    expect(params.get('sort')).toBe('name');
     expect(params.get('page')).toBe('1');
   });
 

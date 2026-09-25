@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus } from 'lucide-react';
 import { customers } from '../../api/customers.js';
+import { useCustomerOrders } from '../../api/orders.js';
+import { formatMoney } from '../../lib/money.js';
+import { StatusBadge, useCanOperate, useDateTime } from '../orders/shared.jsx';
 import { Badge, Card, EmptyState, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
 import { countryName } from '../../lib/countries.js';
 import { useI18n } from '../../lib/i18n.jsx';
@@ -99,6 +102,7 @@ export function CustomerDetailPage() {
   const { customerId } = useParams({ strict: false });
   const { t, locale } = useI18n();
   const canEdit = useCanEditCustomers();
+  const canOperate = useCanOperate();
   const customer = useQuery({
     queryKey: ['customers', 'detail', customerId],
     queryFn: ({ signal }) => customers.get(customerId, signal),
@@ -183,12 +187,67 @@ export function CustomerDetailPage() {
       </div>
 
       <section aria-labelledby="customer-orders" className="space-y-2">
-        <h2 id="customer-orders" className="font-medium">
-          {t('customer.orders')}
-        </h2>
-        {/* Filled in when orders are linked to customers (Phase 1 integration). */}
-        <EmptyState title={t('customer.ordersPlaceholderTitle')}>{t('customer.ordersPlaceholderBody')}</EmptyState>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="customer-orders" className="font-medium">
+            {t('customer.orders')}
+          </h2>
+          {canOperate ? (
+            <Link to="/orders/new" search={{ customer: data.id }} className={`${linkButton} border border-slate-300 bg-white text-slate-900 hover:bg-slate-50`}>
+              <Plus className="size-4" aria-hidden="true" />
+              {t('customer.newOrder')}
+            </Link>
+          ) : null}
+        </div>
+        <CustomerOrders customerId={data.id} />
       </section>
     </div>
+  );
+}
+
+/** The orders placed for this customer record, newest first. */
+function CustomerOrders({ customerId }) {
+  const { t, locale } = useI18n();
+  const dateTime = useDateTime();
+  const orders = useCustomerOrders(customerId);
+
+  if (orders.isPending) return <Spinner label={t('common.loading')} />;
+  if (orders.error) return <ErrorNotice error={orders.error} />;
+  if (orders.data.member.length === 0) return <EmptyState title={t('customer.ordersEmpty')} />;
+
+  return (
+    <Card className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <caption className="sr-only">{t('customer.orders')}</caption>
+        <thead>
+          <tr className="border-b border-slate-200 text-left text-slate-600">
+            <th scope="col" className="px-4 py-2 font-medium">{t('order.number')}</th>
+            <th scope="col" className="px-4 py-2 font-medium">{t('order.placedAt')}</th>
+            <th scope="col" className="px-4 py-2 font-medium">{t('order.status')}</th>
+            <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.total')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.data.member.map((order) => (
+            <tr key={order.id} className="border-b border-slate-100">
+              <td className="px-4 py-2">
+                <Link to="/orders/$orderId" params={{ orderId: order.id }} className="font-medium underline-offset-2 hover:underline">
+                  {order.number}
+                </Link>
+              </td>
+              <td className="px-4 py-2">
+                <time dateTime={order.placedAt}>{dateTime(order.placedAt)}</time>
+              </td>
+              <td className="px-4 py-2">
+                <StatusBadge status={order.status} />
+              </td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatMoney(order.total, order.currency, locale)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {orders.data.totalItems > orders.data.member.length ? (
+        <p className="px-4 py-2 text-sm text-slate-500">{t('customer.ordersMore', { shown: orders.data.member.length, total: orders.data.totalItems })}</p>
+      ) : null}
+    </Card>
   );
 }

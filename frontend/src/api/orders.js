@@ -121,6 +121,15 @@ export function useOrders(view) {
   });
 }
 
+/** The orders placed for one customer record, newest first. */
+export function useCustomerOrders(customerId) {
+  return useQuery({
+    queryKey: ['orders', 'customer', customerId],
+    queryFn: async ({ signal }) =>
+      orderPageSchema.parse(await api(`/api/orders?customer=${encodeURIComponent(customerId)}&sort=-placedAt&itemsPerPage=50`, { signal })),
+  });
+}
+
 export function useOrder(id) {
   return useQuery({
     queryKey: ['order', id],

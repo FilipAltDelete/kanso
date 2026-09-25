@@ -1,15 +1,14 @@
 import { api } from './client.js';
 import { customerEventPageSchema, customerPageSchema, customerSchema } from './schemas.js';
 
-/** The list's sortable columns, as the API names them (`order[field]=asc|desc`). */
+/** The list's sortable columns, as the API names them (`sort=name,-createdAt`, as every Kanso list). */
 export const CUSTOMER_SORTS = ['name', 'email', 'createdAt', 'updatedAt'];
 
 function listQuery({ q, sorting = [], page = 1, pageSize = 25 }) {
   const params = new URLSearchParams({ page: String(page), itemsPerPage: String(pageSize) });
   if (q) params.set('q', q);
-  for (const { id, desc } of sorting) {
-    if (CUSTOMER_SORTS.includes(id)) params.set(`order[${id}]`, desc ? 'desc' : 'asc');
-  }
+  const sort = sorting.filter(({ id }) => CUSTOMER_SORTS.includes(id)).map(({ id, desc }) => `${desc ? '-' : ''}${id}`);
+  if (sort.length > 0) params.set('sort', sort.join(','));
 
   return params.toString();
 }

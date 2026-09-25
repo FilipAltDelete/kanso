@@ -21,6 +21,7 @@ use Kanso\Core\Internal\Api\State\CustomerEventProvider;
             openapi: new Operation(summary: 'Who changed the customer, what, and when.'),
         ),
     ],
+    security: "is_granted('ROLE_VIEWER')",
 )]
 final class CustomerEventResource
 {
@@ -33,7 +34,7 @@ final class CustomerEventResource
     /** "created" or "updated". */
     public string $type = '';
 
-    /** Who made the change: an email, "API key: <name>" or "console". */
+    /** Who made the change, as they were named then: a user's name or email, or an API key's name. */
     public string $actor = '';
 
     /** @var array<string, array{before: mixed, after: mixed}> */

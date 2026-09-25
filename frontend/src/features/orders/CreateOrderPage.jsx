@@ -1,6 +1,8 @@
-import { useId, useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useEffect, useId, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { customers } from '../../api/customers.js';
 import { useAllLocations } from '../../api/inventory.js';
 import { useChannels, useCreateOrder } from '../../api/orders.js';
 import { Button, Card, Checkbox, ErrorNotice, Input, Select } from '../../components/ui/primitives.jsx';
@@ -33,6 +35,26 @@ export function CreateOrderPage() {
   const [currency, setCurrency] = useState('');
   const [customer, setCustomer] = useState({ name: '', email: '' });
   const [shipping, setShipping] = useState(EMPTY_ADDRESS);
+
+  // Opened from a customer's page (`?customer=<id>`): the order is linked to
+  // that record, and starts from its name, email and default shipping address.
+  const { customer: customerId } = useSearch({ strict: false });
+  const linked = useQuery({
+    queryKey: ['customer', customerId],
+    queryFn: ({ signal }) => customers.get(customerId, signal),
+    enabled: typeof customerId === 'string' && customerId !== '',
+  });
+  const [prefilledFrom, setPrefilledFrom] = useState(null);
+  useEffect(() => {
+    const record = linked.data;
+    if (!record || prefilledFrom === record.id) return;
+    setPrefilledFrom(record.id);
+    setCustomer({ name: record.name, email: record.email });
+    const address = record.addresses.find((candidate) => candidate.type === 'shipping' && candidate.isDefault) ?? record.addresses.find((candidate) => candidate.type === 'shipping');
+    if (address) {
+      setShipping(Object.fromEntries(Object.keys(EMPTY_ADDRESS).map((key) => [key, address[key] ?? ''])));
+    }
+  }, [linked.data, prefilledFrom]);
   const [billingSame, setBillingSame] = useState(true);
   const [billing, setBilling] = useState(EMPTY_ADDRESS);
   const [lines, setLines] = useState(() => [emptyLine()]);
@@ -68,7 +90,7 @@ export function CreateOrderPage() {
       channel,
       ...(currency ? { currency } : {}),
       ...(location ? { location } : {}),
-      customer: compact(customer),
+      customer: { ...compact(customer), ...(linked.data ? { id: linked.data.id } : {}) },
       shippingAddress: { ...compact(shipping), countryCode: shipping.countryCode.trim().toUpperCase() },
       ...(billingSame ? {} : { billingAddress: { ...compact(billing), countryCode: billing.countryCode.trim().toUpperCase() } }),
       lines: lines.map((line, index) => {
@@ -132,6 +154,11 @@ export function CreateOrderPage() {
 
       <Card className="space-y-4 p-4">
         <h2 className="text-sm font-semibold">{t('order.customer')}</h2>
+        {linked.data ? (
+          <p className="text-sm text-slate-600">
+            {t('orderForm.linkedCustomer', { name: linked.data.name, email: linked.data.email })}
+          </p>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t('orderForm.customerName')} required error={errors['customer.name']}>
             {(props) => <Input {...props} autoComplete="off" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} />}

@@ -10,15 +10,14 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
-use ApiPlatform\OpenApi\Model\Operation;
-use ApiPlatform\OpenApi\Model\Parameter;
+use ApiPlatform\Metadata\QueryParameter;
 use Kanso\Core\Internal\Api\State\CustomerProcessor;
 use Kanso\Core\Internal\Api\State\CustomerProvider;
 
 /**
  * A customer as the API shows it: a DTO, never the entity (as in Pimsen).
  * Anyone signed in can read customers; creating and changing them needs the
- * operator role (access_control in security.yaml). PATCH is a merge patch,
+ * operator role. PATCH is a merge patch,
  * and `addresses`, when sent, replaces the whole list: send an address's `id`
  * to keep it, leave it out to add one.
  */
@@ -28,30 +27,27 @@ use Kanso\Core\Internal\Api\State\CustomerProvider;
         new GetCollection(
             uriTemplate: '/customers',
             provider: CustomerProvider::class,
-            openapi: new Operation(
-                summary: 'Lists customers, optionally searched by name or email.',
-                parameters: [
-                    new Parameter('q', 'query', 'Matches customers whose name or email contains this text.', schema: ['type' => 'string']),
-                    new Parameter('order[name]', 'query', 'Sort by name.', schema: ['type' => 'string', 'enum' => ['asc', 'desc']]),
-                    new Parameter('order[email]', 'query', 'Sort by email.', schema: ['type' => 'string', 'enum' => ['asc', 'desc']]),
-                    new Parameter('order[createdAt]', 'query', 'Sort by creation time.', schema: ['type' => 'string', 'enum' => ['asc', 'desc']]),
-                    new Parameter('order[updatedAt]', 'query', 'Sort by last change.', schema: ['type' => 'string', 'enum' => ['asc', 'desc']]),
-                ],
-            ),
+            parameters: [
+                'q' => new QueryParameter(schema: ['type' => 'string'], description: 'Matches customers whose name or email contains this text.'),
+                'sort' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated fields, "-" for descending: name, email, createdAt, updatedAt. Default -createdAt.'),
+            ],
         ),
         new Get(uriTemplate: '/customers/{id}', provider: CustomerProvider::class),
         new Post(
             uriTemplate: '/customers',
             status: 201,
             processor: CustomerProcessor::class,
+            security: "is_granted('ROLE_OPERATOR')",
         ),
         new Patch(
             uriTemplate: '/customers/{id}',
             inputFormats: ['json' => ['application/merge-patch+json', 'application/json']],
             provider: CustomerProvider::class,
             processor: CustomerProcessor::class,
+            security: "is_granted('ROLE_OPERATOR')",
         ),
     ],
+    security: "is_granted('ROLE_VIEWER')",
 )]
 final class CustomerResource
 {

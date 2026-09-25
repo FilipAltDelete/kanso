@@ -136,4 +136,35 @@ describe('creating an order', () => {
     const [, { body }] = api.mock.calls.find(([path, options]) => path === '/api/orders' && options?.method === 'POST');
     expect(body).not.toHaveProperty('location');
   });
+
+  it("starts from a customer record's details and links the order to it", async () => {
+    const record = {
+      id: 'c1',
+      email: 'anna@example.com',
+      name: 'Anna Svensson',
+      phone: null,
+      addresses: [
+        { id: 'a1', type: 'shipping', isDefault: true, name: null, company: null, line1: 'Storgatan 1', line2: null, postalCode: '111 22', city: 'Stockholm', region: null, countryCode: 'SE', phone: null },
+      ],
+      createdAt: '2026-09-20T08:00:00+00:00',
+      updatedAt: '2026-09-20T08:00:00+00:00',
+    };
+    const fallback = api.getMockImplementation();
+    api.mockImplementation(async (path, options) => (path === '/api/customers/c1' ? record : fallback(path, options)));
+    renderAt('/orders/new?customer=c1');
+
+    expect(await screen.findByText(/For the customer record Anna Svensson/)).toBeTruthy();
+    expect(screen.getByLabelText(/Customer name/)).toHaveProperty('value', 'Anna Svensson');
+    expect(within(screen.getByRole('group', { name: 'Shipping address' })).getByLabelText(/^Address \(required\)/)).toHaveProperty('value', 'Storgatan 1');
+
+    const line = screen.getByRole('listitem', { name: 'Line 1' });
+    fireEvent.change(within(line).getByLabelText(/^SKU/), { target: { value: 'TSHIRT-M' } });
+    fireEvent.change(within(line).getByLabelText(/^Unit price/), { target: { value: '199.50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create order' }));
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders', expect.objectContaining({ method: 'POST' })));
+    const [, { body }] = api.mock.calls.find(([path, options]) => path === '/api/orders' && options?.method === 'POST');
+    expect(body.customer).toEqual({ id: 'c1', name: 'Anna Svensson', email: 'anna@example.com' });
+    expect(body.shippingAddress).toMatchObject({ line1: 'Storgatan 1', postalCode: '111 22', city: 'Stockholm', countryCode: 'SE' });
+  });
 });

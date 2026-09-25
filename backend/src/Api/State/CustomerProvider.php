@@ -16,8 +16,8 @@ use Kanso\Core\Internal\Domain\Customer\CustomerAddress;
 use Kanso\Core\Internal\Domain\Customer\CustomerStoreInterface;
 
 /**
- * Reads customers: a searched, sorted page (`?q=`, `?order[name]=asc`,
- * `?page=`, `?itemsPerPage=`), or one by id.
+ * Reads customers: a searched, sorted page (`?q=`, `?sort=name,-createdAt`,
+ * `?page=`, `?itemsPerPage=`, as every Kanso list), or one by id.
  *
  * @implements ProviderInterface<CustomerResource>
  */
@@ -47,7 +47,7 @@ final class CustomerProvider implements ProviderInterface
         $limit = $this->pagination->getLimit($operation, $context);
 
         return new TraversablePaginator(
-            new \ArrayIterator(array_map(self::toResource(...), $this->customers->search($query, self::sort($filters['order'] ?? null), $offset, $limit))),
+            new \ArrayIterator(array_map(self::toResource(...), $this->customers->search($query, self::sort($filters['sort'] ?? null), $offset, $limit))),
             $this->pagination->getPage($context),
             $limit,
             $this->customers->count($query),
@@ -68,25 +68,31 @@ final class CustomerProvider implements ProviderInterface
         return $resource;
     }
 
-    /** @return array<string, 'asc'|'desc'> */
-    private static function sort(mixed $order): array
+    /**
+     * `name,-createdAt`: fields in order, "-" for descending. An unknown field
+     * is refused rather than ignored, as for orders, so a typo is not a
+     * silently unsorted list.
+     *
+     * @return array<string, 'asc'|'desc'>
+     */
+    private static function sort(mixed $value): array
     {
-        if (null === $order || [] === $order) {
+        if (null === $value || '' === $value) {
             return self::DEFAULT_SORT;
         }
-        if (!\is_array($order)) {
-            throw new ValidationFailed([['path' => 'order', 'message' => 'Sort as order[field]=asc|desc.', 'code' => 'invalid_sort']]);
+        if (!\is_string($value)) {
+            throw new ValidationFailed([['path' => 'sort', 'message' => 'Sort as sort=field,-field.', 'code' => 'unknown_sort']]);
         }
 
         $sort = [];
-        foreach ($order as $field => $direction) {
-            $direction = \is_string($direction) ? strtolower($direction) : '';
-            if (!\in_array($field, CustomerStoreInterface::SORTABLE, true) || !\in_array($direction, ['asc', 'desc'], true)) {
-                throw new ValidationFailed([['path' => 'order', 'message' => \sprintf('Sort by one of %s, asc or desc.', implode(', ', CustomerStoreInterface::SORTABLE)), 'code' => 'invalid_sort']]);
+        foreach (array_filter(array_map(trim(...), explode(',', $value))) as $part) {
+            $field = ltrim($part, '-');
+            if (!\in_array($field, CustomerStoreInterface::SORTABLE, true)) {
+                throw new ValidationFailed([['path' => 'sort', 'message' => \sprintf('Cannot sort by "%s"; one of: %s, with "-" for descending.', $field, implode(', ', CustomerStoreInterface::SORTABLE)), 'code' => 'unknown_sort']]);
             }
-            $sort[$field] = $direction;
+            $sort[$field] = str_starts_with($part, '-') ? 'desc' : 'asc';
         }
 
-        return $sort;
+        return [] === $sort ? self::DEFAULT_SORT : $sort;
     }
 }

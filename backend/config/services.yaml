@@ -34,7 +34,6 @@ services:
             - '../src/Domain/Security/ApiKey.php'
             # Entities and values; the store interfaces are aliased below.
             - '../src/Domain/Order/'
-            - '../src/Domain/Security/Actor.php'
             - '../src/Domain/Customer/'
             - '../src/Application/Customer/CustomerInput.php'
             - '../src/Application/Customer/Violations.php'

@@ -6,13 +6,13 @@ namespace Kanso\Core\Internal\Application\Customer;
 
 use Kanso\Core\Internal\Application\Exception\NotFound;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Domain\Common\Actor;
 use Kanso\Core\Internal\Domain\Customer\CountryCode;
 use Kanso\Core\Internal\Domain\Customer\Customer;
 use Kanso\Core\Internal\Domain\Customer\CustomerAddress;
 use Kanso\Core\Internal\Domain\Customer\CustomerEvent;
 use Kanso\Core\Internal\Domain\Customer\CustomerStoreInterface;
 use Kanso\Core\Internal\Domain\Customer\DuplicateCustomerEmail;
-use Kanso\Core\Internal\Domain\Security\Actor;
 use Psr\Clock\ClockInterface;
 
 /**

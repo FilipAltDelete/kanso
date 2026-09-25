@@ -12,6 +12,7 @@ use Kanso\Core\Internal\Domain\Common\Actor;
 use Kanso\Core\Internal\Domain\Common\ConcurrentModification;
 use Kanso\Core\Internal\Domain\Common\Page;
 use Kanso\Core\Internal\Domain\Common\TransactionInterface;
+use Kanso\Core\Internal\Domain\Customer\CustomerStoreInterface;
 use Kanso\Core\Internal\Domain\Inventory\Location;
 use Kanso\Core\Internal\Domain\Inventory\LocationStoreInterface;
 use Kanso\Core\Internal\Domain\Order\Channel;
@@ -42,6 +43,7 @@ final class OrderService
     public function __construct(
         private readonly OrderStoreInterface $orders,
         private readonly ChannelStoreInterface $channels,
+        private readonly CustomerStoreInterface $customers,
         private readonly ProductStoreInterface $products,
         private readonly LocationStoreInterface $locations,
         private readonly DefaultLocation $defaultLocation,
@@ -73,6 +75,11 @@ final class OrderService
             $customer = [];
         }
         $customerId = $check->uuid($customer['id'] ?? null, 'customer.id');
+        // `customer.id` links the order to a customer record, which has to exist;
+        // the name, email and addresses are still copied onto the order.
+        if (null !== $customerId && null === $this->customers->findById($customerId)) {
+            $check->violate('customer.id', \sprintf('No customer "%s".', $customerId), 'unknown_customer');
+        }
         $customerName = $check->text($customer['name'] ?? null, 'customer.name', 255);
         $customerEmail = $check->email($customer['email'] ?? null, 'customer.email');
         $shipping = $check->address($input['shippingAddress'] ?? null, 'shippingAddress', true);
@@ -282,6 +289,7 @@ final class OrderService
         $search = $check->text($parameters['q'] ?? null, 'q', self::MAX_SEARCH, false) ?? '';
         $placedFrom = $check->instant($parameters['placedFrom'] ?? null, 'placedFrom');
         $placedBefore = $check->instant($parameters['placedBefore'] ?? null, 'placedBefore');
+        $customerId = $check->uuid($parameters['customer'] ?? null, 'customer');
 
         $check->throwIfInvalid();
 
@@ -294,6 +302,7 @@ final class OrderService
             sort: [] === $sort ? [['field' => 'placedAt', 'desc' => true]] : $sort,
             offset: $offset,
             limit: $limit,
+            customerId: $customerId,
         ));
     }
 
