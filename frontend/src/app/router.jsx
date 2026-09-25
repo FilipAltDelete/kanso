@@ -1,5 +1,6 @@
-import { createRootRoute, createRoute, createRouter, Link } from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link } from '@tanstack/react-router';
 import { DashboardPage } from '../features/dashboard/DashboardPage.jsx';
+import { SettingsPage } from '../features/settings/SettingsPage.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import { Layout } from './Layout.jsx';
 
@@ -20,5 +21,18 @@ const rootRoute = createRootRoute({ component: Layout, notFoundComponent: NotFou
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: DashboardPage });
 
+const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage });
+
+// A dev build's playground for the table component; production builds drop it and its fake data.
+const devRoutes = import.meta.env.DEV
+  ? [
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/dev/table',
+        component: lazyRouteComponent(() => import('../components/ui/table/DataTableDemo.jsx'), 'DataTableDemo'),
+      }),
+    ]
+  : [];
+
 // Orders, inventory, products and customers get their routes in Phase 1 (ROADMAP.md).
-export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute]) });
+export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, settingsRoute, ...devRoutes]) });

@@ -7,7 +7,7 @@ COMPOSE := docker compose
 TOOLS := $(COMPOSE) run --rm --no-deps tools
 NODE := $(COMPOSE) run --rm --no-deps frontend
 
-.PHONY: help install keys up down reset logs shell migrate user test lint stan deptrac cs fix front-install front-lint front-test front-build project-install project-up project-check project-test
+.PHONY: help install keys up down reset logs shell migrate user test lint stan deptrac cs fix front-install front-lint front-test front-build project-install project-up project-check project-test observability-check
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -50,6 +50,12 @@ lint: cs stan deptrac front-lint ## Run every static check
 
 stan: ## PHPStan
 	$(TOOLS) vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+PROMTOOL := docker run --rm -v "$(PWD)/observability/prometheus":/rules -w /rules --entrypoint promtool prom/prometheus:v3.5.0
+
+observability-check: ## Check the Prometheus rules and run their unit tests
+	$(PROMTOOL) check rules kanso-rules.yml kanso-alerts.yml
+	$(PROMTOOL) test rules tests/kanso-alerts.test.yml
 
 deptrac: ## Layer boundaries
 	$(TOOLS) vendor/bin/deptrac analyse --no-progress

@@ -2,7 +2,9 @@
 
 /*
  * As in Pimsen: style on the slate scale and bg-white, and use `accent` for
- * the primary action, so themes can be added later as variable overrides.
+ * the primary action. A colour theme (src/lib/theme.js) is then just a set of
+ * variable overrides below. Dark themes invert the slate scale: 50 is the
+ * page, 900 the strongest text, and `white` is a card's surface.
  */
 @theme {
   --color-accent: var(--color-slate-900);
@@ -13,4 +15,165 @@
 body {
   background-color: var(--color-slate-50);
   color: var(--color-slate-900);
+}
+
+:root[data-theme='tokyo-night'] {
+  --color-white: #1f2335;
+  --color-slate-50: #1a1b26;
+  --color-slate-100: #292e42;
+  --color-slate-200: #343a52;
+  --color-slate-300: #3b4261;
+  --color-slate-400: #565f89;
+  --color-slate-500: #737aa2;
+  --color-slate-600: #9aa5ce;
+  --color-slate-700: #a9b1d6;
+  --color-slate-800: #c0caf5;
+  --color-slate-900: #d5dcfa;
+  --color-accent: #7aa2f7;
+  --color-accent-hover: #89b4fa;
+  --color-accent-fg: #1a1b26;
+  --color-green-100: #26332a;
+  --color-green-800: #9ece6a;
+  --color-red-50: #3b2330;
+  --color-red-200: #5c2f3d;
+  --color-red-500: #f7768e;
+  --color-red-600: #f7768e;
+  --color-red-700: #ff9aab;
+  --color-red-800: #ffb3c0;
+  --color-amber-50: #332c22;
+  --color-amber-100: #40362a;
+  --color-amber-200: #5c4a2c;
+  --color-amber-700: #e0af68;
+  --color-amber-900: #f0c890;
+  --color-sky-50: #1f2d44;
+  --color-sky-200: #2e4a6e;
+  --color-sky-400: #7dcfff;
+  --color-sky-500: #7dcfff;
+  --color-sky-700: #a4dcff;
+}
+
+:root[data-theme='osaka-jade'] {
+  --color-white: #15241e;
+  --color-slate-50: #111c18;
+  --color-slate-100: #1c2d26;
+  --color-slate-200: #23372f;
+  --color-slate-300: #2e463c;
+  --color-slate-400: #53685b;
+  --color-slate-500: #7d8f75;
+  --color-slate-600: #9aa587;
+  --color-slate-700: #b0b48f;
+  --color-slate-800: #c1c497;
+  --color-slate-900: #d8dab4;
+  --color-accent: #549e6a;
+  --color-accent-hover: #63b07a;
+  --color-accent-fg: #0d1512;
+  --color-green-100: #1d3526;
+  --color-green-800: #8cd3a0;
+  --color-red-50: #3a1f22;
+  --color-red-200: #5a2a30;
+  --color-red-500: #ff5345;
+  --color-red-600: #e5584a;
+  --color-red-700: #ff8a7f;
+  --color-red-800: #ffaaa2;
+  --color-amber-50: #2f2c18;
+  --color-amber-100: #3b3719;
+  --color-amber-200: #544d1f;
+  --color-amber-700: #e5c736;
+  --color-amber-900: #f0dc80;
+  --color-sky-50: #16302c;
+  --color-sky-200: #24504a;
+  --color-sky-400: #2dd5b7;
+  --color-sky-500: #2dd5b7;
+  --color-sky-700: #8cd3cb;
+}
+
+:root[data-theme='wine-red'] {
+  --color-white: #24151b;
+  --color-slate-50: #1b1015;
+  --color-slate-100: #2d1b22;
+  --color-slate-200: #3a232c;
+  --color-slate-300: #4a2c38;
+  --color-slate-400: #7a5563;
+  --color-slate-500: #a07d89;
+  --color-slate-600: #c2a3ad;
+  --color-slate-700: #d8bec6;
+  --color-slate-800: #ecd9de;
+  --color-slate-900: #f7eaee;
+  --color-accent: #d9587a;
+  --color-accent-hover: #e8708f;
+  --color-accent-fg: #1b1015;
+  --color-green-100: #2c3322;
+  --color-green-800: #b4c77a;
+  --color-red-50: #43202b;
+  --color-red-200: #62303f;
+  --color-red-500: #f07a94;
+  --color-red-600: #e0607e;
+  --color-red-700: #ff9db2;
+  --color-red-800: #ffbccb;
+  --color-amber-50: #3a2a1f;
+  --color-amber-100: #463223;
+  --color-amber-200: #5e412a;
+  --color-amber-700: #e8a36a;
+  --color-amber-900: #f5c79f;
+  --color-sky-50: #2a2038;
+  --color-sky-200: #43335c;
+  --color-sky-400: #c3a0e8;
+  --color-sky-500: #c3a0e8;
+  --color-sky-700: #dac2f5;
+}
+
+:root[data-theme='lupine'] {
+  --color-slate-50: #f7f5fc;
+  --color-slate-100: #efeaf9;
+  --color-slate-200: #e1d9f3;
+  --color-slate-300: #cbbfe8;
+  --color-slate-400: #9e90c4;
+  --color-slate-500: #6f6496;
+  --color-slate-600: #564c7c;
+  --color-slate-700: #433a66;
+  --color-slate-800: #2f2750;
+  --color-slate-900: #1f1840;
+  --color-accent: #7a3ee0;
+  --color-accent-hover: #6a2fd0;
+  --color-accent-fg: #ffffff;
+  --color-sky-50: #eef3ff;
+  --color-sky-200: #c9d8ff;
+  --color-sky-400: #5b8def;
+  --color-sky-500: #2f6fed;
+  --color-sky-700: #1f4fb8;
+}
+
+:root[data-theme='moonrise'] {
+  --color-white: #1a1233;
+  --color-slate-50: #120c26;
+  --color-slate-100: #1f163d;
+  --color-slate-200: #281d4c;
+  --color-slate-300: #35275f;
+  --color-slate-400: #5a4a88;
+  --color-slate-500: #8a7cb6;
+  --color-slate-600: #b5a9d8;
+  --color-slate-700: #cfc4ea;
+  --color-slate-800: #e6ddf7;
+  --color-slate-900: #f7f0ff;
+  --color-accent: #e8488a;
+  --color-accent-hover: #f5629d;
+  --color-accent-fg: #120c26;
+  --color-green-100: #152c3a;
+  --color-green-800: #7fd6c2;
+  --color-red-50: #3a1538;
+  --color-red-200: #57204b;
+  --color-red-500: #ff5f8f;
+  --color-red-600: #f04a7c;
+  --color-red-700: #ff8fb0;
+  --color-red-800: #ffb5ca;
+  --color-amber-50: #301b30;
+  --color-amber-100: #3c2135;
+  --color-amber-200: #562d3b;
+  --color-amber-700: #ff9f5a;
+  --color-amber-900: #ffd9a8;
+  --color-sky-50: #1f1848;
+  --color-sky-200: #33296d;
+  --color-sky-400: #a48cf5;
+  --color-sky-500: #a48cf5;
+  --color-sky-700: #c9b8ff;
 }

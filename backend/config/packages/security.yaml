@@ -17,6 +17,12 @@ security:
         health:
             pattern: ^/health
             security: false
+        # Not public: the reference proxy forwards `/`, `/api` and `/health`
+        # only, so a scraper reaches the API container directly
+        # (src/Api/Controller/MetricsController.php).
+        metrics:
+            pattern: ^/metrics$
+            security: false
         api:
             pattern: ^/api
             # No sessions: every request carries its own credentials.
@@ -24,6 +30,9 @@ security:
             provider: kanso_users
             entry_point: Kanso\Core\Internal\Api\Http\ProblemEntryPoint
             access_denied_handler: Kanso\Core\Internal\Api\Http\ProblemAccessDeniedHandler
+            custom_authenticators:
+                # Runs only for `X-Api-Key` or `Bearer kso_…`; everything else falls through to JWT.
+                - Kanso\Core\Internal\Infrastructure\Security\ApiKeyAuthenticator
             jwt: ~
 
     access_control:

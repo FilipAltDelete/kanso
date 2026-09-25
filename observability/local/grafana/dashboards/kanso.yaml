@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: kanso
+    folder: Kanso
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards/kanso

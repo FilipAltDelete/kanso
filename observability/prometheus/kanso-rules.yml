@@ -1,0 +1,62 @@
+# Recording rules for Kanso, one set for every installation.
+#
+# Two conventions the rules and both dashboards assume, and which the
+# operator's scrape configuration provides (observability/README.md):
+#
+#   * every series carries `installation="<slug>"` — added where the metrics
+#     leave the installation, because the process does not know its own slug;
+#   * the API containers are scraped under `job="kanso"`.
+#
+# **Every API replica serves the same numbers.** Counters and histograms live
+# in the installation's Redis, so each replica's /metrics is the whole
+# installation's, not its own share. Summing over scrape targets would
+# multiply every rate by the replica count; every rule therefore takes the
+# `max` over targets first, grouping by the metric's own labels so that
+# whatever target labels a platform adds (pod, container, node) fall away.
+# Only `kanso_build_info` is per process.
+#
+# Plain Prometheus rule format: it loads unchanged into Prometheus, Thanos,
+# Mimir, Cortex or VictoriaMetrics' vmalert.
+
+groups:
+  - name: kanso.recording
+    interval: 30s
+    rules:
+      # ── API ─────────────────────────────────────────────────────────────
+      - record: installation:kanso_http_requests:rate5m
+        expr: sum by (installation) (max by (installation, route, method, status) (rate(kanso_http_request_duration_seconds_count[5m])))
+
+      - record: installation:kanso_http_errors:ratio_rate5m
+        expr: |
+          sum by (installation) (max by (installation, route, method, status) (rate(kanso_http_request_duration_seconds_count{status=~"5.."}[5m])))
+            /
+          installation:kanso_http_requests:rate5m
+
+      # The API budget (p95 < 500 ms for list views) is a budget for
+      # interactive requests. Unmatched paths are scanners and typos, not
+      # operators waiting; slow-by-design routes (imports, label batches) get
+      # excluded here as they arrive.
+      - record: installation:kanso_http_request_duration_seconds:p95_5m
+        expr: |
+          histogram_quantile(0.95, sum by (installation, le) (
+            max by (installation, route, method, status, le) (
+              rate(kanso_http_request_duration_seconds_bucket{route!="unmatched"}[5m])
+            )
+          ))
+
+      # ── Workers ─────────────────────────────────────────────────────────
+      - record: installation:kanso_queue_depth:max
+        expr: max by (installation, transport) (kanso_queue_depth)
+
+      - record: installation:kanso_messenger_messages:rate5m
+        expr: sum by (installation, result) (max by (installation, transport, result) (rate(kanso_messenger_messages_total[5m])))
+
+      # What a messenger panel is drawn from: per transport and outcome.
+      - record: installation:kanso_messenger_messages_by_transport:rate5m
+        expr: max by (installation, transport, result) (rate(kanso_messenger_messages_total[5m]))
+
+      # ── Releases ────────────────────────────────────────────────────────
+      # How many different releases answer for one installation. More than
+      # one is normal for the minutes a rollout takes, and a stuck rollout after.
+      - record: installation:kanso_build_info:releases
+        expr: count by (installation) (count by (installation, version) (kanso_build_info))

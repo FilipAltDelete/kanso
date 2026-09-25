@@ -13,6 +13,6 @@ final class ProblemEntryPoint implements AuthenticationEntryPointInterface
 {
     public function start(Request $request, ?AuthenticationException $authException = null): Response
     {
-        return ProblemResponse::create(401, 'Unauthorized', 'This endpoint needs an access token. Sign in at POST /api/auth/login.');
+        return ProblemResponse::create(401, 'Unauthorized', 'This endpoint needs an access token (sign in at POST /api/auth/login) or an API key.');
     }
 }

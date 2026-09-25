@@ -1,0 +1,191 @@
+# promtool test rules observability/prometheus/tests/kanso-alerts.test.yml
+#
+# Each case is a property an operator relies on, stated as series in and
+# alerts out. `make observability-check` runs it.
+
+rule_files:
+  - ../kanso-rules.yml
+  - ../kanso-alerts.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Two API replicas read the same Redis and so report identical counters.
+  # The error ratio must be the installation's, not doubled or halved by the
+  # replica count — and 10 % of requests failing must page.
+  - interval: 30s
+    input_series:
+      - series: 'kanso_http_request_duration_seconds_count{job="kanso",installation="acme",instance="api-1",route="auth_me",method="GET",status="200"}'
+        values: '0+27x60'
+      - series: 'kanso_http_request_duration_seconds_count{job="kanso",installation="acme",instance="api-2",route="auth_me",method="GET",status="200"}'
+        values: '0+27x60'
+      - series: 'kanso_http_request_duration_seconds_count{job="kanso",installation="acme",instance="api-1",route="_api_/orders_post",method="POST",status="500"}'
+        values: '0+3x60'
+      - series: 'kanso_http_request_duration_seconds_count{job="kanso",installation="acme",instance="api-2",route="_api_/orders_post",method="POST",status="500"}'
+        values: '0+3x60'
+    promql_expr_test:
+      - expr: installation:kanso_http_requests:rate5m
+        eval_time: 20m
+        exp_samples:
+          - labels: 'installation:kanso_http_requests:rate5m{installation="acme"}'
+            value: 1
+      - expr: installation:kanso_http_errors:ratio_rate5m
+        eval_time: 20m
+        exp_samples:
+          - labels: 'installation:kanso_http_errors:ratio_rate5m{installation="acme"}'
+            value: 0.1
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: KansoApiErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              installation: acme
+            exp_annotations:
+              summary: "acme: 10% of API requests fail with a 5xx"
+              description: >-
+                Find the failing routes on the installation dashboard. With tracing
+                on, the API's log lines carry trace_id, which leads to the trace.
+
+  # One 500 in a quiet night is not an incident.
+  - interval: 1m
+    input_series:
+      - series: 'kanso_http_request_duration_seconds_count{job="kanso",installation="acme",instance="api-1",route="auth_me",method="GET",status="500"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KansoApiErrorRate
+        exp_alerts: []
+
+  # Every request lands in the 1 s bucket: p95 is past the 500 ms budget.
+  - interval: 1m
+    input_series:
+      - series: 'kanso_http_request_duration_seconds_bucket{job="kanso",installation="acme",instance="api-1",route="_api_/orders_get_collection",method="GET",status="200",le="0.5"}'
+        values: '0x40'
+      - series: 'kanso_http_request_duration_seconds_bucket{job="kanso",installation="acme",instance="api-1",route="_api_/orders_get_collection",method="GET",status="200",le="1"}'
+        values: '0+60x40'
+      - series: 'kanso_http_request_duration_seconds_bucket{job="kanso",installation="acme",instance="api-1",route="_api_/orders_get_collection",method="GET",status="200",le="+Inf"}'
+        values: '0+60x40'
+      - series: 'kanso_http_request_duration_seconds_count{job="kanso",installation="acme",instance="api-1",route="_api_/orders_get_collection",method="GET",status="200"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KansoApiLatencyHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              installation: acme
+            exp_annotations:
+              summary: "acme: API p95 is 975ms (budget 500 ms)"
+              description: >-
+                The p95 of every matched route. The installation dashboard's
+                per-route panel says which one moved.
+
+  # Work waiting, nothing consumed: workers are down. Once a worker consumes
+  # again the alert clears, even with the queue still non-empty.
+  - interval: 1m
+    input_series:
+      - series: 'kanso_queue_depth{job="kanso",installation="acme",instance="api-1",transport="async"}'
+        values: '12x60'
+      - series: 'kanso_queue_depth{job="kanso",installation="acme",instance="api-1",transport="failed"}'
+        values: '0x60'
+      - series: 'kanso_messenger_messages_total{job="kanso",installation="acme",instance="api-1",transport="async",result="handled"}'
+        values: '5x40 6+1x20'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KansoWorkersStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              installation: acme
+            exp_annotations:
+              summary: "acme: 12 messages waiting and none consumed in 10 minutes"
+              description: >-
+                Channel syncs, stock pushes and everything else queued will not run.
+                Check that the worker containers run `messenger:consume async ext`.
+      - eval_time: 50m
+        alertname: KansoWorkersStalled
+        exp_alerts: []
+
+  # An installation whose workers have never consumed anything — the counter
+  # series does not exist yet — still alerts when work is waiting.
+  - interval: 1m
+    input_series:
+      - series: 'kanso_queue_depth{job="kanso",installation="fresh",instance="api-1",transport="ext"}'
+        values: '3x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: KansoWorkersStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              installation: fresh
+            exp_annotations:
+              summary: "fresh: 3 messages waiting and none consumed in 10 minutes"
+              description: >-
+                Channel syncs, stock pushes and everything else queued will not run.
+                Check that the worker containers run `messenger:consume async ext`.
+
+  # A retry is not a failure; a message that used up its retries is.
+  - interval: 1m
+    input_series:
+      - series: 'kanso_messenger_messages_total{job="kanso",installation="acme",instance="api-1",transport="async",result="retried"}'
+        values: '0+1x20'
+      - series: 'kanso_messenger_messages_total{job="kanso",installation="acme",instance="api-1",transport="ext",result="failed"}'
+        values: '0x10 1x10'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: KansoMessagesFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              installation: acme
+              transport: ext
+            exp_annotations:
+              summary: "acme: messages on ext failed for good"
+              description: >-
+                They are in the `failed` transport: `bin/console messenger:failed:show`
+                says why, `messenger:failed:retry` sends them back once fixed.
+
+  # Two releases for the length of a rollout is normal; for two hours it is a
+  # rollout stuck half-way.
+  - interval: 5m
+    input_series:
+      - series: 'kanso_build_info{job="kanso",installation="acme",instance="api-1",version="1.4.0",env="prod"}'
+        values: '1x40'
+      - series: 'kanso_build_info{job="kanso",installation="acme",instance="api-2",version="1.5.0",env="prod"}'
+        values: '1x40'
+      - series: 'kanso_build_info{job="kanso",installation="beta",instance="api-1",version="1.5.0",env="prod"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: KansoMixedReleases
+        exp_alerts: []
+      - eval_time: 2h30m
+        alertname: KansoMixedReleases
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              installation: acme
+            exp_annotations:
+              summary: "acme: 2 releases have been serving side by side for 2 hours"
+
+  - interval: 1m
+    input_series:
+      - series: 'up{job="kanso",installation="acme",instance="api-1"}'
+        values: '1x5 0x10'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: KansoScrapeFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: kanso
+              installation: acme
+              instance: api-1
+            exp_annotations:
+              summary: "acme: the API at api-1 has not answered a scrape for 5 minutes"
+              description: >-
+                /metrics is served by the API container itself, so a failed scrape
+                is a container that is down, restarting or unreachable. Check
+                /health/ready on the same container.

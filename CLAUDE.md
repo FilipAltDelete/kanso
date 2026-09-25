@@ -63,9 +63,10 @@ make lint                            # php-cs-fixer + phpstan (level 8) + deptra
 make front-test / front-lint / front-build
 make user EMAIL=… PASSWORD=… ROLE=ROLE_OPERATOR
 make project-install / project-check / project-test / project-up   # the project/ skeleton
+make observability-check              # promtool: check the rules in observability/ and run their tests
 ```
 
-Console: `docker compose run --rm --no-deps tools php bin/console …` — `kanso:install`, `kanso:user:create`, `kanso:health`, `kanso:jwt:generate-keys`.
+Console: `docker compose run --rm --no-deps tools php bin/console …` — `kanso:install`, `kanso:user:create`, `kanso:api-key:create`, `kanso:api-key:revoke`, `kanso:health`, `kanso:jwt:generate-keys`.
 
 - First login on a fresh installation is **admin / admin** unless `KANSO_ADMIN_EMAIL`/`KANSO_ADMIN_PASSWORD` are set (required in prod).
 - Install frontend packages with `make front-install`, never host `npm install`: the container is Alpine and needs its own native binaries.

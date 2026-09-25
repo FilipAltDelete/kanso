@@ -25,6 +25,10 @@ x-app-env: &app-env
   # Base64-encoded PEM keypair; `make keys` generates one into .env.
   JWT_SECRET_KEY: "${JWT_SECRET_KEY:-}"
   JWT_PUBLIC_KEY: "${JWT_PUBLIC_KEY:-}"
+  # Tracing (observability/README.md): empty is off. With the `observability`
+  # profile up, set it to http://otel-collector:4318 in .env and recreate api
+  # and worker.
+  OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
 x-app-build: &app-build
   context: .
@@ -174,9 +178,56 @@ services:
       <<: *app-build
       target: dev
     environment: *app-env
-    volumes: *app-volumes
+    volumes:
+      - ./backend:/app
+      - ./docker/api/php-dev.ini:/usr/local/etc/php/conf.d/zz-kanso.ini:ro
+      # Beside /app as it is beside backend/ in the repository, so the test that
+      # checks the dashboards against the declared metrics finds it either way.
+      - ./observability:/observability:ro
     profiles: ["tools"]
     command: ["php", "-v"]
+
+  # ── Observability, opt-in: `docker compose --profile observability up -d` ──
+  # A local stand-in for whatever the operator runs, wired the way the shipped
+  # files expect (observability/README.md): the collector adds the
+  # installation to every span, the scrape adds it to every series. Ports
+  # differ from Pimsen's so both stacks can run at once.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.131.0
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./observability/collector/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    environment:
+      KANSO_INSTALLATION: local
+
+  jaeger:
+    image: jaegertracing/jaeger:2.9.0
+    profiles: ["observability"]
+    ports: ["${JAEGER_PORT:-16696}:16686"]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./observability/local/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus:/etc/prometheus/kanso:ro
+    ports: ["${PROMETHEUS_PORT:-19091}:9090"]
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    profiles: ["observability"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/local/grafana:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards/kanso:ro
+    ports: ["${GRAFANA_PORT:-13010}:3000"]
 
 volumes:
   mysql-data:

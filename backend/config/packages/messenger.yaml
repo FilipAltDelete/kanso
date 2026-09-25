@@ -41,6 +41,9 @@ framework:
                     # Workers are long-running, so isolation is engineered here.
                     - doctrine_ping_connection
                     - doctrine_close_connection
+                    # A span where a message is sent and where it is handled,
+                    # joined by the trace context it carries (Pimsen ADR-026).
+                    - Kanso\Core\Internal\Infrastructure\Observability\Tracing\TracingMiddleware
 
 when@test:
     framework:

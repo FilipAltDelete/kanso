@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Kanso\Core\Internal\Api\Controller;
 
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Application\Security\ApiKeyService;
 use Kanso\Core\Internal\Application\Security\AuthenticationService;
+use Kanso\Core\Internal\Domain\Security\ApiKey;
 use Kanso\Core\Internal\Domain\Security\IssuedTokens;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,8 +27,10 @@ final class AuthController
     public const string REFRESH_COOKIE = 'kanso_refresh';
     private const string COOKIE_PATH = '/api/auth';
 
-    public function __construct(private readonly AuthenticationService $authentication)
-    {
+    public function __construct(
+        private readonly AuthenticationService $authentication,
+        private readonly ApiKeyService $apiKeys,
+    ) {
     }
 
     #[Route('/login', name: 'auth_login', methods: ['POST'])]
@@ -69,10 +73,14 @@ final class AuthController
     #[Route('/me', name: 'auth_me', methods: ['GET'])]
     public function me(#[CurrentUser] UserInterface $user): JsonResponse
     {
+        $identifier = $user->getUserIdentifier();
+
         return new JsonResponse([
-            'id' => $user->getUserIdentifier(),
+            'id' => $identifier,
             'roles' => $user->getRoles(),
-            ...$this->authentication->describe($user->getUserIdentifier()),
+            ...(str_starts_with($identifier, ApiKey::IDENTIFIER_PREFIX)
+                ? $this->apiKeys->describe($identifier)
+                : $this->authentication->describe($identifier)),
         ]);
     }
 

@@ -39,7 +39,11 @@
         }
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": false,
+            "tbachert/spi": false
+        }
     },
     "minimum-stability": "stable",
     "prefer-stable": true

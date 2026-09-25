@@ -13,6 +13,13 @@ services:
             $adminPassword: '%env(string:default::KANSO_ADMIN_PASSWORD)%'
             $environment: '%kernel.environment%'
             $loginLimiter: '@limiter.login'
+            $apiKeyLimiter: '@limiter.api_key'
+
+    # A gauge is read at scrape time; implementing the interface is what puts
+    # it on `/metrics`.
+    _instanceof:
+        Kanso\Core\Internal\Domain\Observability\MetricSourceInterface:
+            tags: ['kanso.metric_source']
 
     Kanso\Core\Internal\:
         resource: '../src/'
@@ -22,6 +29,8 @@ services:
             - '../src/Domain/User/User.php'
             - '../src/Domain/User/Role.php'
             - '../src/Domain/Security/IssuedTokens.php'
+            - '../src/Domain/Security/ApiKey.php'
+            - '../src/Infrastructure/Security/ApiKeyRateLimited.php'
             - '../src/Application/Exception/'
             - '../src/Api/Resource/'
 
@@ -35,13 +44,48 @@ services:
     Kanso\Core\Internal\Domain\Security\PasswordHasherInterface: '@Kanso\Core\Internal\Infrastructure\Security\SymfonyPasswordHasher'
     Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface: '@Kanso\Core\Internal\Infrastructure\Security\LexikAccessTokenIssuer'
     Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface: '@Kanso\Core\Internal\Infrastructure\Security\RedisRefreshTokenStore'
+    Kanso\Core\Internal\Domain\Security\ApiKeyStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ApiKeyRepository'
     Kanso\Core\Internal\Domain\Health\HealthCheckInterface: '@Kanso\Core\Internal\Infrastructure\Health\HealthChecker'
+    Kanso\Core\Internal\Domain\Observability\MetricsInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
+    Kanso\Core\Internal\Domain\Observability\MetricsExporterInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
 
     Kanso\Core\Internal\Infrastructure\Security\LexikAccessTokenIssuer:
         arguments:
             $ttl: '%lexik_jwt_authentication.token_ttl%'
 
-    # Redis serves cache, locks and refresh tokens — never queue data.
+    # An API key and a JWT both arrive as `Authorization: Bearer …`; this keeps
+    # the two authenticators from both claiming the same request.
+    Kanso\Core\Internal\Infrastructure\Security\JwtTokenExtractor:
+        decorates: 'lexik_jwt_authentication.extractor.chain_extractor'
+        arguments:
+            $inner: '@.inner'
+
+    Kanso\Core\Internal\Api\Controller\MetricsController:
+        arguments:
+            $sources: !tagged_iterator kanso.metric_source
+
+    Kanso\Core\Internal\Infrastructure\Observability\InstallationMetrics:
+        arguments:
+            # The transports as configured, by name. A locator, because the
+            # names are all this wants — nothing here consumes a queue.
+            $transports: !tagged_locator { tag: 'messenger.receiver', index_by: 'alias' }
+            $version: '%kanso.version%'
+
+    # Tracing (Pimsen ADR-026). The endpoint is the one thing an installation
+    # sets; empty, the provider is a no-op and nothing is recorded or propagated.
+    kanso.tracer_provider:
+        class: OpenTelemetry\API\Trace\TracerProviderInterface
+        factory: ['Kanso\Core\Internal\Infrastructure\Observability\Tracing\TracerProviderFactory', 'create']
+        arguments:
+            $endpoint: '%env(string:default::OTEL_EXPORTER_OTLP_ENDPOINT)%'
+            $version: '%kanso.version%'
+            $environment: '%kernel.environment%'
+
+    Kanso\Core\Internal\Infrastructure\Observability\Tracing\Tracing:
+        arguments:
+            $provider: '@kanso.tracer_provider'
+
+    # Redis serves cache, locks, refresh tokens and metric counters — never queue data.
     Redis:
         class: Redis
         factory: ['Symfony\Component\Cache\Adapter\RedisAdapter', 'createConnection']
@@ -51,6 +95,21 @@ services:
 
 when@test:
     services:
+        # Tracing on, into memory: the suite reads back the spans a request
+        # and the messages it dispatched produced.
+        kanso.tracing.exporter:
+            class: OpenTelemetry\SDK\Trace\SpanExporter\InMemoryExporter
+            public: true
+
+        kanso.tracer_provider:
+            class: OpenTelemetry\API\Trace\TracerProviderInterface
+            factory: ['Kanso\Core\Internal\Infrastructure\Observability\Tracing\TracerProviderFactory', 'create']
+            arguments:
+                $endpoint: ''
+                $version: '%kanso.version%'
+                $environment: '%kernel.environment%'
+                $exporter: '@kanso.tracing.exporter'
+
         # The suite flushes its Redis database, so it must not share one with a
         # running installation.
         Redis:

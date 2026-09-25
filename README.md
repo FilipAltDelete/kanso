@@ -28,7 +28,7 @@ Open <http://localhost:8090> and sign in as **admin / admin** (development defau
 | `docker/` | Images (`api`, `worker`, `web`) and the reference proxy |
 | `compose.yaml` | Local reference deployment; `compose.prod.yaml` runs the images as shipped; `compose.project.yaml` runs it from `project/` |
 
-The `proxy` container routes `/` to the frontend and `/api` and `/health` to the API.
+The `proxy` container routes `/` to the frontend and `/api` and `/health` to the API. The API container also serves Prometheus metrics at `/metrics`, which the proxy does not route. Metrics, tracing and the shipped dashboards are described in [`observability/README.md`](observability/README.md); `docker compose --profile observability up -d` starts a local Prometheus, Grafana and Jaeger.
 
 ## Everyday commands
 
@@ -39,6 +39,7 @@ make lint                # php-cs-fixer, PHPStan level 8, deptrac, ESLint
 make front-test          # Vitest
 make user EMAIL=ops@example.com PASSWORD=… ROLE=ROLE_OPERATOR
 make project-test        # the customer project skeleton's tests (make project-install first)
+make observability-check # promtool on the alert and recording rules
 make logs / down / reset
 ```
 
@@ -46,6 +47,10 @@ make logs / down / reset
 
 - `POST /api/auth/login` → access token (15 min) in the body, refresh token as an HttpOnly cookie
 - `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
+- Integrations authenticate with an API key instead: `X-Api-Key: kso_…` or `Authorization: Bearer kso_…`.
+  Create one with `php bin/console kanso:api-key:create "Shopify sync" --role=ROLE_OPERATOR [--expires="+90 days"] [--created-by=admin@example.com]`
+  (the key is printed once; only its hash is stored) and revoke it with `kanso:api-key:revoke <id>`.
+  A key has one role — Operator or Viewer, never Admin — and 3,000 requests a minute.
 - `GET /health/live`, `GET /health/ready`
 - `GET /api/docs.json` — OpenAPI document (authenticated)
 

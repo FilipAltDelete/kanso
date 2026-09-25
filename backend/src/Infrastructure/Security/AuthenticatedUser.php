@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kanso\Core\Internal\Infrastructure\Security;
 
+use Kanso\Core\Internal\Domain\Security\ApiKey;
 use Kanso\Core\Internal\Domain\User\Role;
 use Kanso\Core\Internal\Domain\User\User;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -14,7 +15,8 @@ use Symfony\Component\Security\Core\User\UserInterface;
  * stays a plain Doctrine entity.
  *
  * The identifier is the user id, so the access token's `sub` claim is the id,
- * not an address that can change.
+ * not an address that can change. An API key's principal is identified as
+ * `api-key:<id>` and has no password.
  */
 final class AuthenticatedUser implements UserInterface, PasswordAuthenticatedUserInterface
 {
@@ -29,6 +31,11 @@ final class AuthenticatedUser implements UserInterface, PasswordAuthenticatedUse
     public static function fromUser(User $user): self
     {
         return new self((string) $user->id(), $user->roles(), $user->passwordHash());
+    }
+
+    public static function fromApiKey(ApiKey $key): self
+    {
+        return new self($key->identifier(), [$key->role()], null);
     }
 
     public function getUserIdentifier(): string

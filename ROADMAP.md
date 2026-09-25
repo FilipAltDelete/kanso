@@ -26,13 +26,14 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Stack, deployment model and auth as Pimsen (`docs/adr/0001`, `0002`)
 - [x] Docker images (api, worker, web), Compose stack, Makefile, hand-written migrations, dev admin seeding
 - [x] JWT login with rotating refresh cookie, login rate limiting, roles (Admin, Operator, Viewer)
+- [x] API keys for integrations: hashed, one role, optional expiry, per-key rate limit (console commands; REST management endpoints not yet)
 - [x] UI shell: login, navigation, empty dashboard, Swedish/English
 - [x] CI: lint, static analysis, tests, image builds (GitHub Actions)
 - [x] Domain model draft (`docs/domain-model.md`)
 - [x] Customer-specific code: core packaged as `kanso/core` + `kanso/contracts`, `project/` skeleton with a sample bundle (`docs/adr/0003`, `docs/extensions.md`)
 - [ ] Deploy target: where images are pushed and which host runs staging/production (open decision)
-- [ ] Metrics and tracing (Prometheus, OpenTelemetry) — only Monolog JSON logging so far
-- [ ] Table component for Phase 1 lists
+- [x] Metrics and tracing as in Pimsen ADR-026: Prometheus `/metrics` (counters in Redis), hand-placed OpenTelemetry spans (off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set), `trace_id` in logs, dashboards and alert rules in `observability/`
+- [x] Table component for Phase 1 lists: `frontend/src/components/ui/table/` (TanStack Table + Virtual, view in the URL); dev demo at `/dev/table`
 
 ---
 

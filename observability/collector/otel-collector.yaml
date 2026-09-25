@@ -1,0 +1,55 @@
+# A reference OpenTelemetry Collector pipeline for one Kanso installation.
+#
+# The application sends OTLP/HTTP to whatever OTEL_EXPORTER_OTLP_ENDPOINT
+# names and knows nothing else (Pimsen ADR-026). This is where the rest is
+# decided:
+#
+#   * which installation the spans belong to — the process does not know its
+#     own slug, so it is added here, from the environment the collector runs in;
+#   * which traces are kept — tail sampling belongs here, where the whole trace
+#     is visible, not in the process, which cannot know yet whether the sync
+#     it just started will fail;
+#   * where they go — any OTLP-speaking backend.
+#
+# Used by the `observability` profile in compose.yaml, which forwards to Jaeger.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # The same label the scrape configuration puts on every kanso_* series, so a
+  # trace and a graph of the same installation are found by the same name.
+  resource:
+    attributes:
+      - key: installation
+        value: ${env:KANSO_INSTALLATION}
+        action: upsert
+
+  batch: {}
+
+  # A fleet keeps every error and every slow trace and a sample of the rest.
+  # Needs the contrib distribution; left out of the local pipeline, which
+  # keeps everything.
+  #
+  # tail_sampling:
+  #   decision_wait: 30s
+  #   policies:
+  #     - {name: errors, type: status_code, status_code: {status_codes: [ERROR]}}
+  #     - {name: slow, type: latency, latency: {threshold_ms: 2000}}
+  #     - {name: rest, type: probabilistic, probabilistic: {sampling_percentage: 10}}
+
+exporters:
+  otlp:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [otlp]

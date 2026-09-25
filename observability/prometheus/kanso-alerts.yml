@@ -1,0 +1,125 @@
+# Alert rules for Kanso, one set for every installation.
+#
+# Needs kanso-rules.yml loaded beside it, and the two scrape conventions it
+# states (`installation` on every series, `job="kanso"` for the API).
+#
+#   critical — someone is paged.
+#   warning  — a ticket, looked at within the working day.
+#
+# Every alert is per installation: one merchant's queue backing up is one
+# merchant's incident, never a fleet-wide page.
+#
+# `make observability-check` validates the files and runs the unit tests in
+# tests/ with promtool.
+
+groups:
+  - name: kanso.availability
+    rules:
+      - alert: KansoScrapeFailing
+        expr: up{job="kanso"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.installation }}: the API at {{ $labels.instance }} has not answered a scrape for 5 minutes"
+          description: >-
+            /metrics is served by the API container itself, so a failed scrape
+            is a container that is down, restarting or unreachable. Check
+            /health/ready on the same container.
+
+      - alert: KansoApiErrorRate
+        # At least a request every 10 s on average, so that one 500 during a
+        # quiet night is not 100 % errors.
+        expr: |
+          installation:kanso_http_errors:ratio_rate5m > 0.05
+            and
+          installation:kanso_http_requests:rate5m > 0.1
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.installation }}: {{ $value | humanizePercentage }} of API requests fail with a 5xx"
+          description: >-
+            Find the failing routes on the installation dashboard. With tracing
+            on, the API's log lines carry trace_id, which leads to the trace.
+
+  - name: kanso.performance
+    rules:
+      - alert: KansoApiLatencyHigh
+        expr: |
+          installation:kanso_http_request_duration_seconds:p95_5m > 0.5
+            and
+          installation:kanso_http_requests:rate5m > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.installation }}: API p95 is {{ $value | humanizeDuration }} (budget 500 ms)"
+          description: >-
+            The p95 of every matched route. The installation dashboard's
+            per-route panel says which one moved.
+
+  - name: kanso.workers
+    rules:
+      - alert: KansoWorkersStalled
+        # Work is waiting and nothing has been consumed from any transport for
+        # 10 minutes: no worker is running, or every one is stuck.
+        expr: |
+          sum by (installation) (installation:kanso_queue_depth:max{transport!="failed"}) > 0
+            unless on (installation)
+          sum by (installation) (max by (installation, transport, result) (increase(kanso_messenger_messages_total[10m]))) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.installation }}: {{ $value }} messages waiting and none consumed in 10 minutes"
+          description: >-
+            Channel syncs, stock pushes and everything else queued will not run.
+            Check that the worker containers run `messenger:consume async ext`.
+
+      - alert: KansoQueueBacklogGrowing
+        expr: |
+          installation:kanso_queue_depth:max{transport!="failed"} > 100
+            and
+          delta(installation:kanso_queue_depth:max{transport!="failed"}[30m]) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.installation }}: {{ $labels.transport }} has {{ $value }} waiting and is still growing"
+          description: >-
+            Workers are consuming, but slower than work arrives. One more
+            worker is the usual answer; the queue is a MySQL table, so this is
+            also where the database starts to feel it.
+
+      - alert: KansoMessagesFailed
+        # Retries are not failures; `failed` is a message that used up its
+        # retries and went to the failure transport.
+        expr: max by (installation, transport) (increase(kanso_messenger_messages_total{result="failed"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.installation }}: messages on {{ $labels.transport }} failed for good"
+          description: >-
+            They are in the `failed` transport: `bin/console messenger:failed:show`
+            says why, `messenger:failed:retry` sends them back once fixed.
+
+      - alert: KansoFailedQueueNotEmpty
+        expr: installation:kanso_queue_depth:max{transport="failed"} > 0
+        for: 24h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.installation }}: {{ $value }} messages have sat in the failure transport for a day"
+
+  - name: kanso.releases
+    rules:
+      - alert: KansoMixedReleases
+        # Two releases side by side is what a rolling deploy looks like for the
+        # minutes it takes. For two hours, the rollout is stuck half-done.
+        expr: installation:kanso_build_info:releases > 1
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.installation }}: {{ $value }} releases have been serving side by side for 2 hours"
