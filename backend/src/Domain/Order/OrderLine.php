@@ -15,9 +15,15 @@ use Symfony\Component\Uid\Uuid;
  * to its product, which is what stock is reserved against.
  *
  * `reservedQuantity` is how much of this line is held in stock at the order's
- * location: all of it while the order is confirmed and not yet shipped, none
- * otherwise. Only OrderStock changes it, in the transaction that changes the
+ * location. While the order holds stock, every unit is reserved, shipped or
+ * cancelled: reserved = quantity − shipped − cancelled; otherwise it is 0.
+ * OrderStock changes it (and the domain methods that move units out of it:
+ * a shipment, a partial cancel), in the transaction that changes the
  * inventory level.
+ *
+ * `quantity` is what was ordered, as last edited; cancelled units stay
+ * counted in it, so the line explains itself: `lineTotal` is the unit price
+ * times the units not cancelled (ADR-0011).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'order_line')]
@@ -62,6 +68,10 @@ class OrderLine
     #[ORM\Column(name: 'shipped_quantity', options: ['default' => 0])]
     private int $shippedQuantity = 0;
 
+    /** Units cancelled by a partial cancel; never shipped. shipped + cancelled ≤ quantity. */
+    #[ORM\Column(name: 'cancelled_quantity', options: ['default' => 0])]
+    private int $cancelledQuantity = 0;
+
     public function __construct(Order $order, int $position, NewOrderLine $line)
     {
         if ($line->quantity < 1) {
@@ -79,7 +89,7 @@ class OrderLine
         $this->name = $line->name;
         $this->quantity = $line->quantity;
         $this->unitPrice = $line->unitPrice;
-        $this->lineTotal = Money::of($line->unitPrice, $order->currency())->multiply($line->quantity)->amount;
+        $this->recalculate();
     }
 
     public function id(): Uuid
@@ -102,13 +112,26 @@ class OrderLine
         return $this->reservedQuantity;
     }
 
-    /** The whole line is now held in stock. */
+    /** Every unit still to ship is now held in stock. */
     public function markReserved(): void
     {
         if (0 !== $this->reservedQuantity) {
             throw new \LogicException(\sprintf('Line %d is already reserved.', $this->position));
         }
-        $this->reservedQuantity = $this->quantity;
+        $this->reservedQuantity = $this->remainingQuantity();
+    }
+
+    /**
+     * The reservation grows or shrinks by `$delta` after an edit; OrderStock
+     * moves the same units on the inventory level.
+     */
+    public function adjustReservation(int $delta): void
+    {
+        $reserved = $this->reservedQuantity + $delta;
+        if ($reserved < 0 || $reserved > $this->remainingQuantity()) {
+            throw new \LogicException(\sprintf('Line %d cannot hold %d reserved; %d left to ship.', $this->position, $reserved, $this->remainingQuantity()));
+        }
+        $this->reservedQuantity = $reserved;
     }
 
     /** What was held is no longer: released when the order is cancelled. */
@@ -122,10 +145,68 @@ class OrderLine
         return $this->shippedQuantity;
     }
 
-    /** Units still to ship. */
+    public function cancelledQuantity(): int
+    {
+        return $this->cancelledQuantity;
+    }
+
+    /** Units still to ship: neither shipped nor cancelled. */
     public function remainingQuantity(): int
     {
-        return $this->quantity - $this->shippedQuantity;
+        return $this->quantity - $this->shippedQuantity - $this->cancelledQuantity;
+    }
+
+    /**
+     * An edit's new ordered quantity. It cannot go below what has already
+     * shipped or been cancelled, and a line has at least one unit (to drop a
+     * line, the edit removes it). The reservation is OrderStock's to follow.
+     */
+    public function changeQuantity(int $quantity): void
+    {
+        if ($quantity < 1 || $quantity < $this->shippedQuantity + $this->cancelledQuantity) {
+            throw new \InvalidArgumentException(\sprintf('Line %d needs a quantity of at least %d.', $this->position, max(1, $this->shippedQuantity + $this->cancelledQuantity)));
+        }
+        $this->quantity = $quantity;
+        $this->recalculate();
+    }
+
+    /**
+     * Units that will not ship: they count as cancelled, stop being reserved
+     * (where they were), and leave the line total.
+     *
+     * @return int how many of them were reserved, for OrderStock to release
+     */
+    public function cancel(int $units): int
+    {
+        if ($units < 1 || $units > $this->remainingQuantity()) {
+            throw new \LogicException(\sprintf('Line %d cannot cancel %d; %d left.', $this->position, $units, $this->remainingQuantity()));
+        }
+        // Orders confirmed before reservations existed hold nothing to release.
+        $released = min($units, $this->reservedQuantity);
+        $this->reservedQuantity -= $released;
+        $this->cancelledQuantity += $units;
+        $this->recalculate();
+
+        return $released;
+    }
+
+    /** @return array{position: int, sku: string, name: string, quantity: int, cancelledQuantity: int, unitPrice: int} what an event records of the line */
+    public function snapshot(): array
+    {
+        return [
+            'position' => $this->position,
+            'sku' => $this->skuCode,
+            'name' => $this->name,
+            'quantity' => $this->quantity,
+            'cancelledQuantity' => $this->cancelledQuantity,
+            'unitPrice' => $this->unitPrice,
+        ];
+    }
+
+    /** The units not cancelled, at the unit price. */
+    private function recalculate(): void
+    {
+        $this->lineTotal = Money::of($this->unitPrice, $this->order->currency())->multiply($this->quantity - $this->cancelledQuantity)->amount;
     }
 
     /**

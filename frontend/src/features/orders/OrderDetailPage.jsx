@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Truck } from 'lucide-react';
+import { ArrowLeft, PackageX, Pencil, Truck } from 'lucide-react';
 import { useOrder, useTransitionOrder } from '../../api/orders.js';
 import { Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
+import { CancelItemsDialog } from './CancelItemsDialog.jsx';
+import { EditOrderDialog } from './EditOrderDialog.jsx';
 import { NoteForm, PaymentCard, TagsCard } from './OrderAnnotations.jsx';
 import { PrintDocuments } from './PrintDocuments.jsx';
 import { ShipDialog } from './ShipDialog.jsx';
@@ -46,6 +48,7 @@ function OrderDetail({ order }) {
   const { t, locale } = useI18n();
   const dateTime = useDateTime();
   const money = (minor) => formatMoney(minor, order.currency, locale);
+  const anyCancelled = order.lines.some((line) => line.cancelledQuantity > 0);
 
   return (
     <div className="space-y-6">
@@ -65,7 +68,10 @@ function OrderDetail({ order }) {
 
       <Transitions order={order} />
 
-      <ShipAction order={order} />
+      <div className="flex flex-wrap gap-2">
+        <ShipAction order={order} />
+        <ChangeActions order={order} />
+      </div>
 
       <PrintDocuments order={order} />
 
@@ -100,6 +106,7 @@ function OrderDetail({ order }) {
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.quantity')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.reserved')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.shipped')}</th>
+              {anyCancelled ? <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.cancelled')}</th> : null}
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.unitPrice')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.lineTotal')}</th>
             </tr>
@@ -112,6 +119,7 @@ function OrderDetail({ order }) {
                 <td className="px-4 py-2 text-right tabular-nums">{line.quantity}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{line.reservedQuantity}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{line.shippedQuantity}</td>
+                {anyCancelled ? <td className="px-4 py-2 text-right tabular-nums">{line.cancelledQuantity}</td> : null}
                 <td className="px-4 py-2 text-right tabular-nums">{money(line.unitPrice)}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{money(line.lineTotal)}</td>
               </tr>
@@ -119,7 +127,7 @@ function OrderDetail({ order }) {
           </tbody>
           <tfoot>
             <tr>
-              <th scope="row" colSpan={6} className="px-4 py-2 text-right font-semibold">
+              <th scope="row" colSpan={anyCancelled ? 7 : 6} className="px-4 py-2 text-right font-semibold">
                 {t('order.total')}
               </th>
               <td className="px-4 py-2 text-right font-semibold tabular-nums">{money(order.total)}</td>
@@ -240,6 +248,17 @@ function useDescribeEvent() {
         return t('orderEvent.note');
       case 'payment_status_changed':
         return t('orderEvent.payment', { from: payment(event.before), to: payment(event.after) });
+      case 'edited':
+        return t('orderEvent.edited', { changes: describeEdit(event, t) });
+      case 'lines_cancelled':
+        return [
+          t('orderEvent.linesCancelled', {
+            items: (event.after?.lines ?? []).map((line) => t('orderEvent.cancelledItem', { quantity: line.cancelled, sku: line.sku })).join(', '),
+          }),
+          event.after?.reason ? t('orderEvent.cancelReason', { reason: event.after.reason }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
       case 'tags_changed': {
         const before = event.before?.tags ?? [];
         const after = event.after?.tags ?? [];
@@ -254,6 +273,25 @@ function useDescribeEvent() {
         return event.type;
     }
   };
+}
+
+/** What an edit changed, in a few words: each line's quantity, lines added and removed, and which details. */
+function describeEdit(event, t) {
+  const before = new Map((event.before?.lines ?? []).map((line) => [line.position, line]));
+  const after = new Map((event.after?.lines ?? []).map((line) => [line.position, line]));
+  const parts = [];
+  for (const position of [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => a - b)) {
+    const old = before.get(position);
+    const now = after.get(position);
+    if (old && now) parts.push(t('orderEvent.edited.quantity', { sku: now.sku, from: old.quantity, to: now.quantity }));
+    else if (now) parts.push(t('orderEvent.edited.added', { sku: now.sku, quantity: now.quantity }));
+    else parts.push(t('orderEvent.edited.removed', { sku: old.sku }));
+  }
+  if ('customerName' in (event.after ?? {}) || 'customerEmail' in (event.after ?? {})) parts.push(t('orderEvent.edited.customer'));
+  if ('shippingAddress' in (event.after ?? {})) parts.push(t('orderEvent.edited.shippingAddress'));
+  if ('billingAddress' in (event.after ?? {})) parts.push(t('orderEvent.edited.billingAddress'));
+
+  return parts.join(', ');
 }
 
 function Timeline({ events }) {
@@ -291,6 +329,34 @@ function ShipAction({ order }) {
         {t('ship.open')}
       </Button>
       {open ? <ShipDialog order={order} onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
+/** "Edit order" and "Cancel items", for operators, while the order allows them. */
+function ChangeActions({ order }) {
+  const { t } = useI18n();
+  const canOperate = useCanOperate();
+  const [open, setOpen] = useState(null);
+
+  if (!canOperate || (!order.canEdit && !order.canCancelItems)) return null;
+
+  return (
+    <>
+      {order.canEdit ? (
+        <Button size="sm" variant="outline" onClick={() => setOpen('edit')}>
+          <Pencil className="size-4" aria-hidden="true" />
+          {t('orderEdit.open')}
+        </Button>
+      ) : null}
+      {order.canCancelItems ? (
+        <Button size="sm" variant="outline" onClick={() => setOpen('cancel')}>
+          <PackageX className="size-4" aria-hidden="true" />
+          {t('cancelItems.open')}
+        </Button>
+      ) : null}
+      {open === 'edit' ? <EditOrderDialog order={order} onClose={() => setOpen(null)} /> : null}
+      {open === 'cancel' ? <CancelItemsDialog order={order} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }

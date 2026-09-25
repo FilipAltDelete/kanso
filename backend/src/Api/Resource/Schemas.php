@@ -30,11 +30,12 @@ final class Schemas
             'productId' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'Null only on lines placed before lines were linked to products'],
             'sku' => ['type' => 'string'],
             'name' => ['type' => 'string'],
-            'quantity' => ['type' => 'integer'],
-            'reservedQuantity' => ['type' => 'integer', 'description' => 'Held in stock at the order\'s location: from confirmation until it ships or is cancelled, otherwise 0. reservedQuantity + shippedQuantity = quantity while the order holds stock'],
+            'quantity' => ['type' => 'integer', 'description' => 'Ordered, as last edited; cancelled units stay counted here'],
+            'reservedQuantity' => ['type' => 'integer', 'description' => 'Held in stock at the order\'s location: from confirmation until it ships or is cancelled, otherwise 0. reservedQuantity + shippedQuantity + cancelledQuantity = quantity while the order holds stock'],
             'shippedQuantity' => ['type' => 'integer', 'description' => 'Units that have left in shipments'],
+            'cancelledQuantity' => ['type' => 'integer', 'description' => 'Units cancelled by a partial cancel; shippedQuantity + cancelledQuantity ≤ quantity'],
             'unitPrice' => ['type' => 'integer', 'description' => 'Minor units'],
-            'lineTotal' => ['type' => 'integer', 'description' => 'Minor units'],
+            'lineTotal' => ['type' => 'integer', 'description' => 'Minor units: unitPrice × (quantity − cancelledQuantity)'],
         ],
     ];
 
@@ -46,6 +47,15 @@ final class Schemas
             'name' => ['type' => 'string', 'maxLength' => 255, 'description' => 'Default: the product\'s name'],
             'quantity' => ['type' => 'integer', 'minimum' => 1],
             'unitPrice' => ['type' => 'integer', 'minimum' => 0, 'description' => 'Minor units of the order currency'],
+        ],
+    ];
+
+    public const array LINE_CHANGE = [
+        'type' => 'object',
+        'required' => ['lineId', 'quantity'],
+        'properties' => [
+            'lineId' => ['type' => 'string', 'format' => 'uuid', 'description' => 'An order line\'s id'],
+            'quantity' => ['type' => 'integer', 'minimum' => 0, 'description' => 'The new ordered quantity, not below what has shipped or been cancelled; 0 removes the line'],
         ],
     ];
 
@@ -90,10 +100,10 @@ final class Schemas
         'type' => 'object',
         'properties' => [
             'id' => ['type' => 'string', 'format' => 'uuid'],
-            'type' => ['type' => 'string', 'enum' => ['created', 'transition', 'shipment', 'note', 'tags_changed', 'payment_status_changed']],
+            'type' => ['type' => 'string', 'enum' => ['created', 'transition', 'shipment', 'note', 'tags_changed', 'payment_status_changed', 'edited', 'lines_cancelled']],
             'transition' => ['type' => ['string', 'null'], 'description' => 'Set on a transition event'],
             'actor' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']]],
-            'before' => ['type' => ['object', 'null'], 'description' => 'What changed, before: {status, heldFrom}, {tags} or {paymentStatus}'],
+            'before' => ['type' => ['object', 'null'], 'description' => 'What changed, before: {status, heldFrom}, {tags}, {paymentStatus}; an edit has only the parts it changed ({lines, total, customerName, customerEmail, shippingAddress, billingAddress}); a partial cancel {lines, total}'],
             'after' => ['type' => ['object', 'null'], 'description' => 'What changed, after; a note event has {note}'],
             'occurredAt' => ['type' => 'string', 'format' => 'date-time'],
         ],

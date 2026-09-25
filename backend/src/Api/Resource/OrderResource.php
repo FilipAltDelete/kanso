@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\QueryParameter;
 use Kanso\Core\Internal\Api\State\AnnotateOrderProcessor;
 use Kanso\Core\Internal\Api\State\CreateOrderProcessor;
 use Kanso\Core\Internal\Api\State\CreateShipmentProcessor;
+use Kanso\Core\Internal\Api\State\EditOrderProcessor;
 use Kanso\Core\Internal\Api\State\OrderProvider;
 use Kanso\Core\Internal\Api\State\TransitionOrderProcessor;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -75,6 +76,26 @@ use Symfony\Component\Serializer\Attribute\Groups;
             processor: TransitionOrderProcessor::class,
             normalizationContext: ['groups' => ['order:list', 'order:detail']],
             description: 'Move the order through its state machine. Send the version you last saw: 409 if the order changed since, or if the transition is not allowed from its status.',
+        ),
+        new Post(
+            uriTemplate: '/orders/{id}/edits',
+            status: 200,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: EditOrderInput::class,
+            read: false,
+            processor: EditOrderProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Edit the order before fulfillment: line quantities, lines added or removed, the customer\'s name and email, the addresses. Fields left out are unchanged. Allowed while pending, confirmed or allocated (or on hold from one of those) and before anything has shipped; otherwise 409 `not_editable`. When the order holds stock, the reservation follows in the same transaction; a short product is a 409 `insufficient_stock` naming the lines. Unknown SKUs are refused. Send the version you last saw: 409 `stale_version` if the order changed since. Writes one `edited` event with what changed.',
+        ),
+        new Post(
+            uriTemplate: '/orders/{id}/cancellations',
+            status: 200,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: CancelItemsInput::class,
+            read: false,
+            processor: EditOrderProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Cancel some units of some lines (a partial cancel). Shipped units cannot be cancelled. Their reservation is released in the same transaction and the lines keep a `cancelledQuantity`. When nothing is left to ship, the order finishes through the state machine: shipped if any of it shipped, otherwise cancelled. Send the version you last saw: 409 if the order changed since, or if it is shipped, delivered or cancelled.',
         ),
         new Post(
             uriTemplate: '/orders/{id}/notes',
@@ -223,4 +244,12 @@ final class OrderResource
     /** Whether a shipment can be recorded now: confirmed to packed, not on hold, units left. */
     #[Groups(['order:detail'])]
     public bool $canShip = false;
+
+    /** Whether the order can be edited now: pending, confirmed or allocated (or on hold from one), nothing shipped. */
+    #[Groups(['order:detail'])]
+    public bool $canEdit = false;
+
+    /** Whether some units can be cancelled now: the order is not shipped, delivered or cancelled, and has units left to ship. */
+    #[Groups(['order:detail'])]
+    public bool $canCancelItems = false;
 }

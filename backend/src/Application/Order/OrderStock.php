@@ -21,7 +21,8 @@ use Kanso\Core\Internal\Domain\Order\ShipmentLine;
 
 /**
  * An order's stock: reserved when it is confirmed, released when it is
- * cancelled, taken off on hand shipment by shipment.
+ * cancelled (wholly or partly), moved up or down when it is edited, taken
+ * off on hand shipment by shipment.
  *
  * Every method must run inside the transaction that changes the order's
  * status, so the two commit together or not at all. The levels involved are
@@ -59,10 +60,14 @@ final class OrderStock
         /** @var array<string, array{product: Product, quantity: int, index: int}> $needed */
         $needed = [];
         foreach ($lines as $index => $line) {
+            // Units cancelled while the order was pending are not reserved.
+            if (0 === $line->remainingQuantity()) {
+                continue;
+            }
             $product = self::product($line);
             $id = $product->id()->toRfc4122();
             $needed[$id] ??= ['product' => $product, 'quantity' => 0, 'index' => $index];
-            $needed[$id]['quantity'] += $line->quantity();
+            $needed[$id]['quantity'] += $line->remainingQuantity();
         }
 
         $levels = $this->lock(array_column($needed, 'product'), $location);
@@ -83,9 +88,12 @@ final class OrderStock
         }
 
         foreach ($lines as $line) {
+            if (0 === $line->remainingQuantity()) {
+                continue;
+            }
             $level = $levels[self::product($line)->id()->toRfc4122()];
             \assert(null !== $level);
-            $change = $level->reserve($line->quantity(), $now);
+            $change = $level->reserve($line->remainingQuantity(), $now);
             $line->markReserved();
             $this->record(MovementType::Reservation, $level, $change, $order, $actor, $now);
         }
@@ -95,6 +103,110 @@ final class OrderStock
     public function release(Order $order, Actor $actor, \DateTimeImmutable $now): void
     {
         $this->settle($order, MovementType::Release, $actor, $now);
+    }
+
+    /**
+     * After an edit: each touched line's reservation moves to what it should
+     * now be — every unit left to ship while the order holds stock, nothing
+     * for a line that was removed or an order that holds nothing. Increases
+     * are all or nothing, like confirm: when a product is short, nothing
+     * moves, and the conflict names each line that needs more.
+     *
+     * @param list<OrderLine>    $touched lines the edit changed, added or removed
+     * @param array<int, string> $paths   request path of each touched line, by spl_object_id(), for the violations
+     */
+    public function follow(Order $order, array $touched, array $paths, Actor $actor, \DateTimeImmutable $now): void
+    {
+        $current = $order->lines();
+        $holds = $order->holdsStock();
+
+        /** @var list<array{line: OrderLine, delta: int}> $moves */
+        $moves = [];
+        $unlinked = [];
+        foreach ($touched as $line) {
+            $target = $holds && \in_array($line, $current, true) ? $line->remainingQuantity() : 0;
+            $delta = $target - $line->reservedQuantity();
+            if (0 === $delta) {
+                continue;
+            }
+            if (null === $line->product()) {
+                $unlinked[] = ['path' => ($paths[spl_object_id($line)] ?? 'lines').'.lineId', 'message' => \sprintf('Line %d (%s) is not linked to a product, so it has no stock to reserve.', $line->position(), $line->skuCode()), 'code' => 'no_product'];
+                continue;
+            }
+            $moves[] = ['line' => $line, 'delta' => $delta];
+        }
+        if ([] !== $unlinked) {
+            throw new ValidationFailed($unlinked);
+        }
+        if ([] === $moves) {
+            return;
+        }
+
+        $location = self::location($order);
+        $levels = $this->lock(array_map(static fn (array $move): Product => self::product($move['line']), $moves), $location);
+
+        // Per product, what the edit takes from available, net of what it gives back.
+        $net = [];
+        foreach ($moves as $move) {
+            $id = self::product($move['line'])->id()->toRfc4122();
+            $net[$id] = ($net[$id] ?? 0) + $move['delta'];
+        }
+        $short = [];
+        foreach ($moves as $move) {
+            $product = self::product($move['line']);
+            $id = $product->id()->toRfc4122();
+            $available = $levels[$id]?->available() ?? 0;
+            if ($move['delta'] > 0 && $net[$id] > $available) {
+                $short[] = [
+                    'path' => ($paths[spl_object_id($move['line'])] ?? 'lines').'.quantity',
+                    'message' => \sprintf('%s: %d available at %s, %d more needed.', $product->sku(), $available, $location->code(), $net[$id]),
+                    'code' => 'insufficient_stock',
+                ];
+            }
+        }
+        if ([] !== $short) {
+            throw new Conflict(\sprintf('Not enough stock at %s for the edit of order %s.', $location->code(), $order->number()), $short);
+        }
+
+        // Releases first, so a product that moves between lines never looks short.
+        usort($moves, static fn (array $a, array $b): int => $a['delta'] <=> $b['delta']);
+        foreach ($moves as $move) {
+            $line = $move['line'];
+            $level = $levels[self::product($line)->id()->toRfc4122()]
+                ?? throw new \LogicException(\sprintf('Order %s holds stock of %s at %s, but there is no inventory level.', $order->number(), $line->skuCode(), $location->code()));
+            if ($move['delta'] > 0) {
+                $change = $level->reserve($move['delta'], $now);
+                $type = MovementType::Reservation;
+            } else {
+                $change = $level->release(-$move['delta'], $now);
+                $type = MovementType::Release;
+            }
+            $line->adjustReservation($move['delta']);
+            $this->record($type, $level, $change, $order, $actor, $now);
+        }
+    }
+
+    /**
+     * Gives back what a partial cancel took off the lines' reservations
+     * (Order::cancelUnits() has already lowered them).
+     *
+     * @param list<array{line: OrderLine, released: int}> $released
+     */
+    public function releaseCancelled(Order $order, array $released, Actor $actor, \DateTimeImmutable $now): void
+    {
+        $released = array_values(array_filter($released, static fn (array $entry): bool => $entry['released'] > 0));
+        if ([] === $released) {
+            return;
+        }
+
+        $location = self::location($order);
+        $levels = $this->lock(array_map(static fn (array $entry): Product => self::product($entry['line']), $released), $location);
+        foreach ($released as $entry) {
+            $level = $levels[self::product($entry['line'])->id()->toRfc4122()]
+                ?? throw new \LogicException(\sprintf('Order %s holds stock of %s at %s, but there is no inventory level.', $order->number(), $entry['line']->skuCode(), $location->code()));
+            $change = $level->release($entry['released'], $now);
+            $this->record(MovementType::Release, $level, $change, $order, $actor, $now);
+        }
     }
 
     /**

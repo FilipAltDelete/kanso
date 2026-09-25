@@ -208,25 +208,41 @@ final class OrderService
                 continue;
             }
 
-            $sku = $check->text($line['sku'] ?? null, $path.'.sku', 64);
-            // Optional: the product's own name unless the order says otherwise.
-            $name = $check->text($line['name'] ?? null, $path.'.name', 255, false);
-            $quantity = $check->integer($line['quantity'] ?? null, $path.'.quantity', 1, self::MAX_QUANTITY);
-            $unitPrice = $check->integer($line['unitPrice'] ?? null, $path.'.unitPrice', 0, self::MAX_UNIT_PRICE);
-
-            // Every line is for a product the catalogue has: that is what
-            // stock is reserved against when the order is confirmed.
-            $product = null === $sku ? null : $this->products->findBySku($sku);
-            if (null !== $sku && null === $product) {
-                $check->violate($path.'.sku', \sprintf('No product with SKU "%s".', $sku), 'unknown_sku');
-            }
-
-            if (null !== $product && null !== $quantity && null !== $unitPrice) {
-                $lines[] = new NewOrderLine($product, $name ?? $product->name(), $quantity, $unitPrice);
+            $new = $this->newLine($line, $path, $check);
+            if (null !== $new) {
+                $lines[] = $new;
             }
         }
 
         return $lines;
+    }
+
+    /**
+     * One new line as sent (`sku`, optional `name`, `quantity`, `unitPrice`),
+     * checked; null when it has a violation. Also used by edits that add lines.
+     *
+     * @param array<mixed> $line
+     */
+    public function newLine(array $line, string $path, OrderInput $check): ?NewOrderLine
+    {
+        $sku = $check->text($line['sku'] ?? null, $path.'.sku', 64);
+        // Optional: the product's own name unless the order says otherwise.
+        $name = $check->text($line['name'] ?? null, $path.'.name', 255, false);
+        $quantity = $check->integer($line['quantity'] ?? null, $path.'.quantity', 1, self::MAX_QUANTITY);
+        $unitPrice = $check->integer($line['unitPrice'] ?? null, $path.'.unitPrice', 0, self::MAX_UNIT_PRICE);
+
+        // Every line is for a product the catalogue has: that is what
+        // stock is reserved against when the order is confirmed.
+        $product = null === $sku ? null : $this->products->findBySku($sku);
+        if (null !== $sku && null === $product) {
+            $check->violate($path.'.sku', \sprintf('No product with SKU "%s".', $sku), 'unknown_sku');
+        }
+
+        if (null === $product || null === $quantity || null === $unitPrice) {
+            return null;
+        }
+
+        return new NewOrderLine($product, $name ?? $product->name(), $quantity, $unitPrice);
     }
 
     /** The location the order names by code, or the installation's default. */

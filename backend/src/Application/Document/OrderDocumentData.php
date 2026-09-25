@@ -28,13 +28,18 @@ final class OrderDocumentData
         $lines = [];
         $units = 0;
         foreach ($order->lines() as $line) {
+            // Cancelled units are neither picked nor packed (ADR-0011).
+            $quantity = $line->quantity() - $line->cancelledQuantity();
+            if (0 === $quantity) {
+                continue;
+            }
             $lines[] = [
                 'position' => $line->position(),
                 'sku' => $line->skuCode(),
                 'name' => $line->name(),
-                'quantity' => $line->quantity(),
+                'quantity' => $quantity,
             ];
-            $units += $line->quantity();
+            $units += $quantity;
         }
 
         $billing = $order->billingAddress();

@@ -56,6 +56,7 @@ final class OrderPresenter
                 'quantity' => $line->quantity(),
                 'reservedQuantity' => $line->reservedQuantity(),
                 'shippedQuantity' => $line->shippedQuantity(),
+                'cancelledQuantity' => $line->cancelledQuantity(),
                 'unitPrice' => $line->unitPrice()->amount,
                 'lineTotal' => $line->lineTotal()->amount,
             ];
@@ -89,6 +90,8 @@ final class OrderPresenter
             ];
         }
         $resource->canShip = $order->canShip();
+        $resource->canEdit = $order->canEdit();
+        $resource->canCancelItems = $order->canCancelUnits();
         $resource->availableTransitions = array_map(static fn (Transition $transition): string => $transition->value, $order->availableTransitions());
 
         return $resource;
