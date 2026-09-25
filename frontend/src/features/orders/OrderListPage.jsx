@@ -1,12 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
-import { ORDER_STATUSES, useChannels, useOrders } from '../../api/orders.js';
+import { Plus, Tag, X } from 'lucide-react';
+import { ORDER_STATUSES, PAYMENT_STATUSES, useChannels, useOrders, useOrderTags } from '../../api/orders.js';
 import { ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
-import { StatusBadge, useCanOperate, useDateTime } from './shared.jsx';
+import { BulkTagDialog } from './BulkTagDialog.jsx';
+import { PaymentBadge, StatusBadge, TagList, useCanOperate, useDateTime } from './shared.jsx';
 
 const DEFAULTS = { sorting: [{ id: 'placedAt', desc: true }] };
 
@@ -23,6 +24,10 @@ export function OrderListPage() {
   const urlView = useUrlView({ defaults: DEFAULTS });
   const orders = useOrders(urlView.view);
   const channels = useChannels();
+  const tags = useOrderTags();
+  // The bulk tag dialog: { mode: 'add' | 'remove', ids, clear } while open.
+  const [tagging, setTagging] = useState(null);
+  const [notice, setNotice] = useState('');
 
   const columns = useMemo(
     () => [
@@ -59,6 +64,22 @@ export function OrderListPage() {
         meta: { filter: { options: ORDER_STATUSES.map((status) => ({ value: status, label: t(`orderStatus.${status}`) })) } },
         cell: ({ getValue }) => <StatusBadge status={getValue()} />,
       },
+      {
+        id: 'paymentStatus',
+        accessorKey: 'paymentStatus',
+        header: t('order.paymentStatus'),
+        enableSorting: false,
+        meta: { filter: { options: PAYMENT_STATUSES.map((status) => ({ value: status, label: t(`paymentStatus.${status}`) })) } },
+        cell: ({ getValue }) => <PaymentBadge status={getValue()} />,
+      },
+      {
+        id: 'tags',
+        accessorFn: (order) => order.tags.join(', '),
+        header: t('order.tags'),
+        enableSorting: false,
+        meta: { filter: { options: (tags.data ?? []).map(({ name }) => ({ value: name, label: name })) } },
+        cell: ({ row }) => <TagList tags={row.original.tags} />,
+      },
       { id: 'lineCount', accessorKey: 'lineCount', header: t('order.lines'), enableSorting: false, meta: { align: 'end' } },
       {
         id: 'total',
@@ -68,7 +89,18 @@ export function OrderListPage() {
         cell: ({ row }) => formatMoney(row.original.total, row.original.currency, locale),
       },
     ],
-    [t, locale, dateTime, channels.data],
+    [t, locale, dateTime, channels.data, tags.data],
+  );
+
+  const bulkActions = useMemo(
+    () =>
+      canOperate
+        ? [
+            { id: 'add-tag', label: t('orders.bulk.addTag'), icon: Tag, onClick: ({ ids, clear }) => setTagging({ mode: 'add', ids, clear }) },
+            { id: 'remove-tag', label: t('orders.bulk.removeTag'), icon: X, onClick: ({ ids, clear }) => setTagging({ mode: 'remove', ids, clear }) },
+          ]
+        : [],
+    [canOperate, t],
   );
 
   return (
@@ -91,6 +123,10 @@ export function OrderListPage() {
 
       {orders.error ? <ErrorNotice error={orders.error} /> : null}
 
+      <p role="status" className="min-h-5 text-sm text-slate-700">
+        {notice}
+      </p>
+
       <DataTable
         {...urlView}
         manual
@@ -101,9 +137,22 @@ export function OrderListPage() {
         columns={columns}
         getRowId={(order) => order.id}
         getRowLabel={(order) => order.number}
+        bulkActions={bulkActions}
         onRowActivate={(order) => navigate({ to: '/orders/$orderId', params: { orderId: order.id } })}
         emptyMessage={t('orders.empty')}
       />
+
+      {tagging ? (
+        <BulkTagDialog
+          mode={tagging.mode}
+          orderIds={tagging.ids}
+          onClose={() => setTagging(null)}
+          onDone={(tag) => {
+            setNotice(t(tagging.mode === 'add' ? 'orders.bulk.added' : 'orders.bulk.removed', { tag, count: new Intl.NumberFormat(locale).format(tagging.ids.length) }));
+            tagging.clear();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

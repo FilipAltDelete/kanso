@@ -5,6 +5,7 @@ import { useOrder, useTransitionOrder } from '../../api/orders.js';
 import { Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
+import { NoteForm, PaymentCard, TagsCard } from './OrderAnnotations.jsx';
 import { PrintDocuments } from './PrintDocuments.jsx';
 import { StatusBadge, useCanOperate, useDateTime } from './shared.jsx';
 
@@ -80,6 +81,11 @@ function OrderDetail({ order }) {
         </Card>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
+        <PaymentCard order={order} />
+        <TagsCard order={order} />
+      </div>
+
       <Card className="overflow-x-auto">
         <table className="w-full text-sm">
           <caption className="px-4 pt-4 text-left text-sm font-semibold text-slate-900">{t('order.lines')}</caption>
@@ -116,7 +122,13 @@ function OrderDetail({ order }) {
         </table>
       </Card>
 
-      <Timeline events={order.events} />
+      <section aria-labelledby="order-timeline" className="space-y-4">
+        <h2 id="order-timeline" className="text-sm font-semibold text-slate-900">
+          {t('orders.timeline')}
+        </h2>
+        <NoteForm order={order} />
+        <Timeline events={order.events} />
+      </section>
     </div>
   );
 }
@@ -199,31 +211,54 @@ function shortSkus(order, violations) {
     .filter(Boolean);
 }
 
-function Timeline({ events }) {
+/** What one event says in the history, in the viewer's language. */
+function useDescribeEvent() {
   const { t } = useI18n();
-  const dateTime = useDateTime();
   const status = (state) => (state?.status ? t(`orderStatus.${state.status}`) : '');
+  const payment = (state) => (state?.paymentStatus ? t(`paymentStatus.${state.paymentStatus}`) : '');
+
+  return (event) => {
+    switch (event.type) {
+      case 'created':
+        return t('orderEvent.created');
+      case 'transition':
+        return t('orderEvent.transition', { transition: t(`orderTransition.${event.transition}`), from: status(event.before), to: status(event.after) });
+      case 'note':
+        return t('orderEvent.note');
+      case 'payment_status_changed':
+        return t('orderEvent.payment', { from: payment(event.before), to: payment(event.after) });
+      case 'tags_changed': {
+        const before = event.before?.tags ?? [];
+        const after = event.after?.tags ?? [];
+        const added = after.filter((tag) => !before.includes(tag));
+        const removed = before.filter((tag) => !after.includes(tag));
+
+        return [added.length ? t('orderEvent.tagsAdded', { tags: added.join(', ') }) : null, removed.length ? t('orderEvent.tagsRemoved', { tags: removed.join(', ') }) : null]
+          .filter(Boolean)
+          .join(' · ');
+      }
+      default:
+        return event.type;
+    }
+  };
+}
+
+function Timeline({ events }) {
+  const dateTime = useDateTime();
+  const describe = useDescribeEvent();
 
   return (
-    <section aria-labelledby="order-timeline">
-      <h2 id="order-timeline" className="text-sm font-semibold text-slate-900">
-        {t('orders.timeline')}
-      </h2>
-      <ol className="mt-3 space-y-3 border-l border-slate-200 pl-4">
-        {[...events].reverse().map((event) => (
-          <li key={event.id} className="relative">
-            <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full bg-slate-400" aria-hidden="true" />
-            <p className="text-sm text-slate-900">
-              {event.type === 'created'
-                ? t('orderEvent.created')
-                : t('orderEvent.transition', { transition: t(`orderTransition.${event.transition}`), from: status(event.before), to: status(event.after) })}
-            </p>
-            <p className="text-xs text-slate-500">
-              {event.actor.name} · <time dateTime={event.occurredAt}>{dateTime(event.occurredAt)}</time>
-            </p>
-          </li>
-        ))}
-      </ol>
-    </section>
+    <ol className="space-y-3 border-l border-slate-200 pl-4">
+      {[...events].reverse().map((event) => (
+        <li key={event.id} className="relative">
+          <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full bg-slate-400" aria-hidden="true" />
+          <p className="text-sm text-slate-900">{describe(event)}</p>
+          {event.type === 'note' ? <blockquote className="mt-1 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-800">{event.after?.note}</blockquote> : null}
+          <p className="text-xs text-slate-500">
+            {event.actor.name} · <time dateTime={event.occurredAt}>{dateTime(event.occurredAt)}</time>
+          </p>
+        </li>
+      ))}
+    </ol>
   );
 }

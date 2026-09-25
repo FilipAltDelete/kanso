@@ -61,14 +61,18 @@ final class Schemas
         'type' => 'object',
         'properties' => [
             'id' => ['type' => 'string', 'format' => 'uuid'],
-            'type' => ['type' => 'string', 'enum' => ['created', 'transition']],
-            'transition' => ['type' => ['string', 'null']],
+            'type' => ['type' => 'string', 'enum' => ['created', 'transition', 'note', 'tags_changed', 'payment_status_changed']],
+            'transition' => ['type' => ['string', 'null'], 'description' => 'Set on a transition event'],
             'actor' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']]],
-            'before' => ['type' => ['object', 'null']],
-            'after' => ['type' => ['object', 'null']],
+            'before' => ['type' => ['object', 'null'], 'description' => 'What changed, before: {status, heldFrom}, {tags} or {paymentStatus}'],
+            'after' => ['type' => ['object', 'null'], 'description' => 'What changed, after; a note event has {note}'],
             'occurredAt' => ['type' => 'string', 'format' => 'date-time'],
         ],
     ];
+
+    public const array TAG = ['type' => 'string', 'minLength' => 1, 'maxLength' => 64, 'pattern' => '^[^,]+$'];
+
+    public const array PAYMENT_STATUS = ['type' => 'string', 'enum' => ['unpaid', 'authorized', 'paid', 'refunded', 'partially_refunded']];
 
     private function __construct()
     {

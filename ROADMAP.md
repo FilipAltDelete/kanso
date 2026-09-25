@@ -72,7 +72,8 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Order REST API: create, list (status, channel, date range, search, sort, paging), detail with timeline, `POST /orders/{id}/transitions`
 - [x] Order UI: list with filters and saved view in the URL, detail with lines, addresses, actions and history, create-order form
 - [x] Stock reservation: order lines linked to products by SKU (unknown SKUs refused); confirm reserves, cancel releases, ship takes the stock off on hand, each in the status change's transaction; one location per order (named, or `KANSO_DEFAULT_LOCATION`); short stock is a 409 naming the lines; reserved quantity on the order page (`docs/adr/0005`)
-- [ ] CSV order import; editing orders, partial cancel, notes and tags; payment status
+- [ ] CSV order import; editing orders, partial cancel
+- [x] Notes, tags and payment status on orders: notes in any status, shown in the history with who and when; free tags (filter on the list, bulk add/remove from the bulk-action bar, `GET /api/order-tags`); payment status `unpaid`/`authorized`/`paid`/`refunded`/`partially_refunded` set by hand, with the version; an order event for every change (`docs/adr/0008`)
 - [x] Pick lists and packing slips as PDFs (Swedish or English): Twig + dompdf in a worker, stored in S3/MinIO, downloaded through a five-minute signed link; "Print" on the order page (`docs/adr/0007`)
 - [ ] Marking orders shipped with a tracking number; partial shipments
 

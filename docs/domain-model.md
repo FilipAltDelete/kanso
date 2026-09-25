@@ -1,6 +1,6 @@
 # Domain model (draft)
 
-Phase 0 deliverable: the entities Phase 1 builds. In code so far: `User` and `ApiKey`; `Customer` with `CustomerAddress` and `CustomerEvent` (customers); `Product`, `Location`, `InventoryLevel` and `InventoryMovement` (catalog and inventory); and `Channel`, `Order`, `OrderLine` and `OrderEvent` (orders). The rest is a draft. Names and fields will change as Phase 1 lands; update this file when they do.
+Phase 0 deliverable: the entities Phase 1 builds. In code so far: `User` and `ApiKey`; `Customer` with `CustomerAddress` and `CustomerEvent` (customers); `Product`, `Location`, `InventoryLevel` and `InventoryMovement` (catalog and inventory); and `Channel`, `Order`, `OrderLine`, `OrderTag` and `OrderEvent` (orders). The rest is a draft. Names and fields will change as Phase 1 lands; update this file when they do.
 
 ```mermaid
 erDiagram
@@ -24,7 +24,7 @@ erDiagram
 | Customer | Buyer | email (unique, case-insensitive), name, phone |
 | CustomerAddress | A customer's billing or shipping address; several of each, one default per type | type, is_default, recipient, company, lines, postal_code, city, region, country_code (ISO 3166-1), phone |
 | CustomerEvent | Audit trail of customer changes | customer, type (created/updated), actor, changes (before/after per field), occurred_at |
-| Order | The core object | number (from a sequence, 10001 up; gaps possible), channel, status, held_from, currency, customer copied on (name, email, shipping/billing address, optional customer_id, not a foreign key yet), total_amount (minor units), placed_at, version |
+| Order | The core object | number (from a sequence, 10001 up; gaps possible), channel, status, held_from, payment_status (`unpaid`, `authorized`, `paid`, `refunded`, `partially_refunded`; set by hand in Phase 1, never card data), currency, customer copied on (name, email, shipping/billing address, optional customer_id, not a foreign key yet), total_amount (minor units), placed_at, version |
 | OrderLine | One SKU on an order, copied, not linked to Product yet | position, sku_code, name, quantity, unit_price, line_total (minor units); quantity_shipped comes with shipments |
 | Product (SKU) | What is sold and stocked | sku (fixed once created), name, barcode, weight_grams, version |
 | Location | Warehouse or store | code (fixed once created), name, address, version |
@@ -32,7 +32,8 @@ erDiagram
 | InventoryMovement | Append-only history of every level change | product, location, type, reason, note, on_hand/reserved before and after, actor, occurred_at |
 | Reservation | Stock held for an order line — in code, `order_line.reserved_quantity` at the order's `location` (one location per order in Phase 1; ADR-0005) | order_line, location, quantity |
 | Shipment | A parcel leaving a location | order, lines, carrier, tracking_number, shipped_at |
-| OrderEvent | Audit trail: creation and every state change | order, type (`created`, `transition`), transition, actor + actor name, before/after, occurred_at |
+| OrderTag | A free-text label on an order, for filtering and bulk work (ADR-0008) | order, name (1–64 characters, no comma; unique per order ignoring case); at most 20 per order |
+| OrderEvent | Audit trail: creation, every state change, notes, tag and payment status changes | order, type (`created`, `transition`, `note`, `tags_changed`, `payment_status_changed`), transition, actor + actor name, before/after, occurred_at |
 | Document | A generated PDF for an order (pick list, packing slip) and the job that makes it | type, order, order_version, locale, status (queued/running/done/failed), storage_key, requested_by |
 | Return | Phase 3 | — |
 

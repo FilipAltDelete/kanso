@@ -123,4 +123,101 @@ describe('the order detail', () => {
     expect(alert.textContent).toContain('SOCKS');
     expect(alert.textContent).not.toContain('TSHIRT-M');
   });
+
+  it('tells notes, tag changes and payment changes apart in the history', async () => {
+    const at = '2026-09-26T09:00:00+00:00';
+    api.mockResolvedValue(
+      orderFixture({
+        events: [
+          ...orderFixture().events,
+          { id: 'e2', type: 'tags_changed', actor: { id: 'u1', name: 'Olle' }, before: { tags: ['rush'] }, after: { tags: ['VIP'] }, occurredAt: at },
+          { id: 'e3', type: 'payment_status_changed', actor: { id: 'u1', name: 'Olle' }, before: { paymentStatus: 'unpaid' }, after: { paymentStatus: 'paid' }, occurredAt: at },
+          { id: 'e4', type: 'note', actor: { id: 'u3', name: 'Siv' }, after: { note: 'Ring innan leverans.\nPort 2.' }, occurredAt: at },
+        ],
+      }),
+    );
+    renderAt('/orders/o1', { locale: 'sv' });
+
+    await screen.findByRole('heading', { name: 'Order 10001' });
+    const history = within(screen.getByRole('region', { name: 'Historik' })).getAllByRole('listitem');
+    expect(history.map((item) => item.querySelector('p').textContent)).toEqual([
+      'Anteckning',
+      'Betalning: Obetald → Betald',
+      'Taggar tillagda: VIP · Taggar borttagna: rush',
+      'Ordern skapades',
+    ]);
+    expect(history[0].querySelector('blockquote').textContent).toBe('Ring innan leverans.\nPort 2.');
+    expect(history[0].textContent).toContain('Siv');
+  });
+
+  it('adds a note in any status', async () => {
+    const cancelled = orderFixture({ status: 'cancelled', availableTransitions: [] });
+    api.mockResolvedValueOnce(cancelled).mockResolvedValueOnce({
+      ...cancelled,
+      events: [...cancelled.events, { id: 'e2', type: 'note', actor: { id: 'u1', name: 'Olle' }, after: { note: 'Kunden ångrade sig.' }, occurredAt: '2026-09-26T09:00:00+00:00' }],
+    });
+    renderAt('/orders/o1');
+
+    const field = await screen.findByLabelText('Add a note');
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }));
+    expect(screen.getByText('Write the note first.')).toBeTruthy();
+    expect(api).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(field, { target: { value: ' Kunden ångrade sig. ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }));
+
+    expect(await screen.findByText('Kunden ångrade sig.')).toBeTruthy();
+    expect(api).toHaveBeenCalledWith('/api/orders/o1/notes', { method: 'POST', body: { note: 'Kunden ångrade sig.' } });
+    expect(field.value).toBe('');
+  });
+
+  it('adds and removes tags', async () => {
+    let tags = ['VIP'];
+    api.mockImplementation(async (path, { body } = {}) => {
+      if (path === '/api/order-tags') return { member: [{ name: 'VIP', orders: 2 }, { name: 'Rush', orders: 1 }] };
+      if (path === '/api/orders/o1/tags') tags = [...tags, ...(body.add ?? [])].filter((tag) => !(body.remove ?? []).includes(tag)).sort();
+      return orderFixture({ tags });
+    });
+    renderAt('/orders/o1');
+
+    const field = await screen.findByLabelText('New tag');
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: 'Rush' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add tag' }));
+    await screen.findByRole('button', { name: 'Remove tag Rush' });
+    expect(api).toHaveBeenCalledWith('/api/orders/o1/tags', { method: 'POST', body: { add: ['Rush'] } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove tag VIP' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove tag VIP' })).toBeNull());
+    expect(api).toHaveBeenCalledWith('/api/orders/o1/tags', { method: 'POST', body: { remove: ['VIP'] } });
+  });
+
+  it('sets the payment status with the version it was shown at', async () => {
+    api.mockResolvedValueOnce(orderFixture({ version: 3 })).mockResolvedValueOnce(orderFixture({ version: 4, paymentStatus: 'authorized' }));
+    renderAt('/orders/o1');
+
+    const select = await screen.findByLabelText('Payment status');
+    expect(screen.getByText(/never card details/)).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Save payment status' });
+    expect(save.disabled).toBe(true);
+
+    fireEvent.change(select, { target: { value: 'authorized' } });
+    fireEvent.click(save);
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders/o1/payment-status', { method: 'POST', body: { paymentStatus: 'authorized', version: 3 } }));
+    await waitFor(() => expect(save.disabled).toBe(true));
+    expect(select.value).toBe('authorized');
+  });
+
+  it('shows a viewer the payment status and tags without controls', async () => {
+    api.mockResolvedValue(orderFixture({ paymentStatus: 'partially_refunded', tags: ['VIP'] }));
+    renderAt('/orders/o1', { user: viewer });
+
+    await screen.findByRole('heading', { name: 'Order 10001' });
+    expect(screen.getByText('Partly refunded')).toBeTruthy();
+    expect(screen.getByText('VIP')).toBeTruthy();
+    expect(screen.queryByLabelText('Payment status')).toBeNull();
+    expect(screen.queryByLabelText('New tag')).toBeNull();
+    expect(screen.queryByLabelText('Add a note')).toBeNull();
+  });
 });

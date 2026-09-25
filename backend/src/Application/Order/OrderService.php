@@ -23,6 +23,7 @@ use Kanso\Core\Internal\Domain\Order\OrderCustomer;
 use Kanso\Core\Internal\Domain\Order\OrderQuery;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
+use Kanso\Core\Internal\Domain\Order\PaymentStatus;
 use Kanso\Core\Internal\Domain\Order\Transition;
 use Kanso\Core\Internal\Domain\Order\TransitionNotAllowed;
 use Psr\Clock\ClockInterface;
@@ -273,6 +274,16 @@ final class OrderService
             }
         }
 
+        $paymentStatuses = [];
+        foreach ($this->list($parameters['paymentStatus'] ?? null) as $value) {
+            $paymentStatus = PaymentStatus::tryFrom($value);
+            if (null === $paymentStatus) {
+                $check->violate('paymentStatus', \sprintf('Unknown payment status "%s"; one of: %s.', $value, implode(', ', PaymentStatus::values())), 'unknown_payment_status');
+            } else {
+                $paymentStatuses[] = $paymentStatus;
+            }
+        }
+
         $sort = [];
         foreach ($this->list($parameters['sort'] ?? null) as $value) {
             $field = ltrim($value, '-');
@@ -303,6 +314,8 @@ final class OrderService
             offset: $offset,
             limit: $limit,
             customerId: $customerId,
+            tags: $this->list($parameters['tag'] ?? null),
+            paymentStatuses: $paymentStatuses,
         ));
     }
 

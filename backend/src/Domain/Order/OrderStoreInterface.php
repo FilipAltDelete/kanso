@@ -10,7 +10,19 @@ interface OrderStoreInterface
 {
     public function findById(string $id): ?Order;
 
-    /** @return Page<Order> */
+    /**
+     * The orders there are among these ids, with their tags loaded; unknown ids are left out.
+     *
+     * @param list<string> $ids
+     *
+     * @return list<Order>
+     */
+    public function findByIds(array $ids): array;
+
+    /** @return list<array{name: string, orders: int}> every tag in use and how many orders have it, by name */
+    public function tagCounts(): array;
+
+    /** @return Page<Order> with their tags loaded */
     public function search(OrderQuery $query): Page;
 
     /**

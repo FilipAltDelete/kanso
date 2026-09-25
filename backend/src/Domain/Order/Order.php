@@ -18,11 +18,19 @@ use Symfony\Component\Uid\Uuid;
  * is cascaded, so it is written in the same flush, and so the same
  * transaction, as the status. `version` is Doctrine's optimistic lock: a
  * flush over a change someone else saved first fails instead of overwriting.
+ *
+ * Notes and tags annotate the order rather than change it: they write their
+ * event but leave `version` alone, so tagging a hundred orders from the list
+ * never makes an operator's open order page stale. The payment status is
+ * part of the order and moves `version` like any other change.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'sales_order')]
 class Order
 {
+    public const int MAX_TAGS = 20;
+    public const int MAX_NOTE_LENGTH = 2000;
+
     /** The statuses in which the order's stock is reserved. */
     private const array HOLDING_STOCK = [OrderStatus::Confirmed, OrderStatus::Allocated, OrderStatus::Picking, OrderStatus::Packed];
 
@@ -43,6 +51,9 @@ class Order
     /** Where an on-hold order returns to on release. */
     #[ORM\Column(name: 'held_from', length: 16, nullable: true, enumType: OrderStatus::class)]
     private ?OrderStatus $heldFrom = null;
+
+    #[ORM\Column(name: 'payment_status', length: 24, enumType: PaymentStatus::class)]
+    private PaymentStatus $paymentStatus = PaymentStatus::Unpaid;
 
     #[ORM\Column(length: 3)]
     private string $currency;
@@ -99,6 +110,10 @@ class Order
     #[ORM\OrderBy(['id' => 'ASC'])]
     private Collection $events;
 
+    /** @var Collection<int, OrderTag> */
+    #[ORM\OneToMany(targetEntity: OrderTag::class, mappedBy: 'order', cascade: ['persist'], orphanRemoval: true)]
+    private Collection $tags;
+
     /** @param list<NewOrderLine> $lines */
     private function __construct(string $number, Channel $channel, string $currency, Location $location, OrderCustomer $customer, array $lines, \DateTimeImmutable $placedAt, \DateTimeImmutable $now)
     {
@@ -122,6 +137,7 @@ class Order
         $this->updatedAt = $now;
         $this->lines = new ArrayCollection();
         $this->events = new ArrayCollection();
+        $this->tags = new ArrayCollection();
 
         $total = Money::zero($this->currency);
         foreach ($lines as $index => $line) {
@@ -171,6 +187,93 @@ class Order
         return $event;
     }
 
+    /** A free-text note, in any status. The event is the note: who wrote it, when, and the text. */
+    public function addNote(string $text, Actor $actor, \DateTimeImmutable $now): OrderEvent
+    {
+        $text = trim($text);
+        if ('' === $text || mb_strlen($text) > self::MAX_NOTE_LENGTH) {
+            throw new \InvalidArgumentException(\sprintf('A note is 1 to %d characters.', self::MAX_NOTE_LENGTH));
+        }
+
+        $event = new OrderEvent($this, OrderEvent::NOTE, null, $actor, null, ['note' => $text], $now);
+        $this->events->add($event);
+
+        return $event;
+    }
+
+    /**
+     * Adds and removes tags, ignoring case: adding one the order has, or
+     * removing one it does not, changes nothing. Records an event only when
+     * the tags changed.
+     *
+     * @param list<string> $add
+     * @param list<string> $remove
+     *
+     * @throws \InvalidArgumentException when a name is not a valid tag (OrderTag::normalize)
+     * @throws \DomainException          when the order would have more than MAX_TAGS
+     */
+    public function changeTags(array $add, array $remove, Actor $actor, \DateTimeImmutable $now): ?OrderEvent
+    {
+        $before = $this->tags();
+
+        foreach ($remove as $name) {
+            $name = OrderTag::normalize($name);
+            foreach ($this->tags as $tag) {
+                if (OrderTag::same($tag->name(), $name)) {
+                    $this->tags->removeElement($tag);
+                }
+            }
+        }
+        foreach ($add as $name) {
+            $name = OrderTag::normalize($name);
+            if (!$this->hasTag($name)) {
+                $this->tags->add(new OrderTag($this, $name));
+            }
+        }
+
+        if ($this->tags->count() > self::MAX_TAGS) {
+            throw new \DomainException(\sprintf('Order %s would have more than %d tags.', $this->number, self::MAX_TAGS));
+        }
+
+        $after = $this->tags();
+        if ($after === $before) {
+            return null;
+        }
+
+        $event = new OrderEvent($this, OrderEvent::TAGS_CHANGED, null, $actor, ['tags' => $before], ['tags' => $after], $now);
+        $this->events->add($event);
+
+        return $event;
+    }
+
+    public function hasTag(string $name): bool
+    {
+        foreach ($this->tags as $tag) {
+            if (OrderTag::same($tag->name(), $name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Set by hand in Phase 1; any status may follow any other. Null when it is already that. */
+    public function changePaymentStatus(PaymentStatus $status, Actor $actor, \DateTimeImmutable $now): ?OrderEvent
+    {
+        if ($status === $this->paymentStatus) {
+            return null;
+        }
+
+        $before = ['paymentStatus' => $this->paymentStatus->value];
+        $this->paymentStatus = $status;
+        $this->updatedAt = $now;
+
+        $event = new OrderEvent($this, OrderEvent::PAYMENT_STATUS_CHANGED, null, $actor, $before, ['paymentStatus' => $status->value], $now);
+        $this->events->add($event);
+
+        return $event;
+    }
+
     /**
      * Whether this order has stock held for it: from confirmation until it
      * ships or is cancelled, and while on hold from one of those statuses.
@@ -207,6 +310,7 @@ class Order
     {
         return [
             ...$this->statusState(),
+            'paymentStatus' => $this->paymentStatus->value,
             'channel' => $this->channel->code(),
             'currency' => $this->currency,
             'total' => $this->totalAmount,
@@ -237,6 +341,20 @@ class Order
     public function heldFrom(): ?OrderStatus
     {
         return $this->heldFrom;
+    }
+
+    public function paymentStatus(): PaymentStatus
+    {
+        return $this->paymentStatus;
+    }
+
+    /** @return list<string> in alphabetical order, ignoring case */
+    public function tags(): array
+    {
+        $names = array_map(static fn (OrderTag $tag): string => $tag->name(), array_values($this->tags->toArray()));
+        usort($names, static fn (string $a, string $b): int => strcasecmp($a, $b));
+
+        return $names;
     }
 
     public function currency(): string
