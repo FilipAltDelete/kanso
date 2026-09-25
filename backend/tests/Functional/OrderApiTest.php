@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Kanso\Core\Tests\Functional;
 
 use Doctrine\DBAL\Connection;
+use Kanso\Core\Internal\Application\Catalog\CatalogService;
+use Kanso\Core\Internal\Application\Inventory\InventoryService;
 use Kanso\Core\Internal\Application\User\UserService;
+use Kanso\Core\Internal\Domain\Common\Actor;
+use Kanso\Core\Internal\Domain\Inventory\Address;
 use Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface;
 use Kanso\Core\Internal\Domain\User\Role;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -22,6 +26,18 @@ final class OrderApiTest extends WebTestCase
         $this->client = static::createClient();
         $this->operator = $this->token(Role::OPERATOR, 'Olle Operator');
         $this->viewer = $this->token(Role::VIEWER, 'Vera Viewer');
+
+        // One location, so it is the default, and plenty of every SKU these
+        // tests order, so confirming is never short.
+        $catalog = static::getContainer()->get(CatalogService::class);
+        $inventory = static::getContainer()->get(InventoryService::class);
+        self::assertInstanceOf(CatalogService::class, $catalog);
+        self::assertInstanceOf(InventoryService::class, $inventory);
+        $location = $catalog->createLocation('WH1', 'Main', new Address());
+        foreach (['TSHIRT-M', 'SOCKS', 'A', 'B', 'C', 'X'] as $sku) {
+            $product = $catalog->createProduct($sku, $sku, null, null);
+            $inventory->adjust((string) $product->id(), (string) $location->id(), 100, null, 'received', null, 0, new Actor('test', 'Test'));
+        }
     }
 
     public function testCreateAnOrderManually(): void

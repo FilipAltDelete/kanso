@@ -28,7 +28,7 @@ erDiagram
 | Location | Warehouse or store | code (fixed once created), name, address, version |
 | InventoryLevel | Stock of one SKU at one location | on_hand, reserved (available = on_hand − reserved; 0 ≤ reserved ≤ on_hand), version |
 | InventoryMovement | Append-only history of every level change | product, location, type, reason, note, on_hand/reserved before and after, actor, occurred_at |
-| Reservation | Stock held for an order line | order_line, inventory_level, quantity |
+| Reservation | Stock held for an order line — in code, `order_line.reserved_quantity` at the order's `location` (one location per order in Phase 1; ADR-0005) | order_line, location, quantity |
 | Shipment | A parcel leaving a location | order, lines, carrier, tracking_number, shipped_at |
 | OrderEvent | Audit trail: creation and every state change | order, type (`created`, `transition`), transition, actor + actor name, before/after, occurred_at |
 | Return | Phase 3 | — |

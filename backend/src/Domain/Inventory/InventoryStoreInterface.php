@@ -15,6 +15,15 @@ interface InventoryStoreInterface
     public function findLevelById(string $id): ?InventoryLevel;
 
     /**
+     * The level, read fresh and locked until the surrounding transaction ends:
+     * another transaction that wants the same level waits, then sees what this
+     * one wrote. For reservations, where a stale read is an oversell. Must be
+     * called inside TransactionInterface::run(); lock several levels in one
+     * fixed order (by product id) so two transactions cannot deadlock.
+     */
+    public function lockLevel(Product $product, Location $location): ?InventoryLevel;
+
+    /**
      * Filters: `product` and `location`, by id.
      *
      * @return Page<InventoryLevel>

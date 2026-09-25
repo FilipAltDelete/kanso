@@ -46,18 +46,23 @@ function refreshAccessToken() {
   return refreshInFlight;
 }
 
+/**
+ * A JSON body is serialized; a Blob (a File the user picked) is sent as it
+ * is, with its own type unless `headers` names one.
+ */
 export async function api(path, { method = 'GET', body, headers = {}, signal, allowRetry = true } = {}) {
+  const raw = body instanceof Blob;
   const response = await fetch(path, {
     method,
     signal,
     credentials: 'same-origin',
     headers: {
       Accept: 'application/ld+json, application/json',
-      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...headers,
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
   });
 
   if (response.status === 401 && allowRetry && accessToken !== null) {

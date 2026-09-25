@@ -58,4 +58,12 @@ export function orderFixture(overrides = {}) {
   };
 }
 
+export const locationsFixture = {
+  member: [
+    { id: 'loc1', code: 'WH1', name: 'Main', addressLine1: null, addressLine2: null, postalCode: null, city: null, countryCode: null, version: 1 },
+    { id: 'loc2', code: 'ST1', name: 'Store', addressLine1: null, addressLine2: null, postalCode: null, city: null, countryCode: null, version: 1 },
+  ],
+  totalItems: 2,
+};
+
 export const channelsFixture = { member: [{ code: 'manual', name: 'Manual', type: 'manual', currency: 'SEK' }] };

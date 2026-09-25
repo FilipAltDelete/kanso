@@ -70,6 +70,12 @@ final class InMemoryInventory implements InventoryStoreInterface, TransactionInt
         return null;
     }
 
+    /** No other writers in memory, so a lock is a plain read. */
+    public function lockLevel(Product $product, Location $location): ?InventoryLevel
+    {
+        return $this->findLevel($product, $location);
+    }
+
     public function findLevelById(string $id): ?InventoryLevel
     {
         return null;

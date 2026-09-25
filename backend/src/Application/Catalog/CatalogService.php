@@ -22,8 +22,6 @@ use Psr\Clock\ClockInterface;
  */
 final class CatalogService
 {
-    public const int MAX_WEIGHT_GRAMS = 10_000_000;
-
     public function __construct(
         private readonly ProductStoreInterface $products,
         private readonly LocationStoreInterface $locations,
@@ -36,8 +34,8 @@ final class CatalogService
     {
         $sku = trim($sku);
         $violations = [
-            ...self::check('sku', 1 === preg_match('/^\S{1,64}$/u', $sku), 'A SKU is 1–64 characters with no spaces.', 'format'),
-            ...$this->productFields($name, $barcode, $weightGrams),
+            ...ProductRules::sku($sku),
+            ...ProductRules::fields($name, $barcode, $weightGrams),
         ];
         if ([] === $violations && null !== $this->products->findBySku($sku)) {
             $violations[] = ['path' => 'sku', 'message' => \sprintf('SKU "%s" already exists.', $sku), 'code' => 'taken'];
@@ -54,7 +52,7 @@ final class CatalogService
 
     public function updateProduct(Product $product, int $expectedVersion, string $name, ?string $barcode, ?int $weightGrams): Product
     {
-        self::throwIfAny($this->productFields($name, $barcode, $weightGrams));
+        self::throwIfAny(ProductRules::fields($name, $barcode, $weightGrams));
         self::assertVersion('product', $product->version(), $expectedVersion);
 
         return $this->write(function () use ($product, $name, $barcode, $weightGrams): Product {
@@ -115,18 +113,6 @@ final class CatalogService
     }
 
     /** @return list<array{path: string, message: string, code: string}> */
-    private function productFields(string $name, ?string $barcode, ?int $weightGrams): array
-    {
-        $barcode = self::blankToNull($barcode);
-
-        return [
-            ...self::check('name', '' !== trim($name) && mb_strlen(trim($name)) <= 255, 'A product needs a name of at most 255 characters.', 'required'),
-            ...self::check('barcode', null === $barcode || 1 === preg_match('/^\S{1,64}$/u', $barcode), 'A barcode is at most 64 characters with no spaces.', 'format'),
-            ...self::check('weightGrams', null === $weightGrams || ($weightGrams >= 0 && $weightGrams <= self::MAX_WEIGHT_GRAMS), \sprintf('Weight is whole grams between 0 and %d.', self::MAX_WEIGHT_GRAMS), 'range'),
-        ];
-    }
-
-    /** @return list<array{path: string, message: string, code: string}> */
     private function locationFields(string $name, Address $address): array
     {
         return [
@@ -162,7 +148,7 @@ final class CatalogService
     /** @return list<array{path: string, message: string, code: string}> */
     private static function check(string $path, bool $ok, string $message, string $code): array
     {
-        return $ok ? [] : [['path' => $path, 'message' => $message, 'code' => $code]];
+        return ProductRules::check($path, $ok, $message, $code);
     }
 
     /** @param list<array{path: string, message: string, code: string}> $violations */
@@ -175,8 +161,6 @@ final class CatalogService
 
     private static function blankToNull(?string $value): ?string
     {
-        $value = null === $value ? null : trim($value);
-
-        return '' === $value ? null : $value;
+        return ProductRules::blankToNull($value);
     }
 }

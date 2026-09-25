@@ -52,11 +52,14 @@ final class InventoryMovementResource
 {
     #[ApiProperty(identifier: true)]
     public string $id = '';
-    /** What caused it: `adjustment` for now. */
+    /** What caused it: `adjustment`, `reservation`, `release` or `shipment`. */
     public string $type = '';
     /** For adjustments: received, count, damaged, lost, found, returned, correction or other. */
     public ?string $reason = null;
     public ?string $note = null;
+    /** The order behind a reservation, release or shipment. */
+    public ?string $orderId = null;
+    public ?string $orderNumber = null;
     public string $productId = '';
     public string $sku = '';
     public string $productName = '';

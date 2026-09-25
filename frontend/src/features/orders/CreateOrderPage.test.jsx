@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { api } from '../../api/client.js';
-import { channelsFixture, orderFixture, renderAt } from './testing.jsx';
+import { channelsFixture, locationsFixture, orderFixture, renderAt } from './testing.jsx';
 
 vi.mock('../../api/client.js', () => ({ api: vi.fn(), ApiError: class extends Error {} }));
 
@@ -14,7 +14,7 @@ function fillMinimalOrder() {
   type('Ort (obligatoriskt) *', 'Stockholm', shipping);
   const line = screen.getByRole('listitem', { name: 'Rad 1' });
   type('Artikelnr (obligatoriskt) *', 'TSHIRT-M', line);
-  type('Benämning (obligatoriskt) *', 'T-shirt, M', line);
+  type('Benämning', 'T-shirt, M', line);
   type('Antal (obligatoriskt) *', '3', line);
   type('Styckpris (obligatoriskt) *', '199,50', line);
 }
@@ -24,6 +24,7 @@ describe('creating an order', () => {
     api.mockReset();
     api.mockImplementation(async (path, options) => {
       if (path === '/api/channels') return channelsFixture;
+      if (path.startsWith('/api/locations')) return locationsFixture;
       if (path === '/api/orders' && options?.method === 'POST') return orderFixture();
       if (path === '/api/orders/o1') return orderFixture();
       throw new Error(`Unexpected ${path}`);
@@ -66,6 +67,7 @@ describe('creating an order', () => {
   it('shows the server’s violations at their fields, in the viewer’s language', async () => {
     api.mockImplementation(async (path, options) => {
       if (path === '/api/channels') return channelsFixture;
+      if (path.startsWith('/api/locations')) return locationsFixture;
       if (options?.method === 'POST') {
         throw Object.assign(new Error('The request is not valid.'), {
           status: 422,
@@ -105,5 +107,33 @@ describe('creating an order', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove line 2' }));
     expect(total()).toBe('Total: SEK 10.00');
     expect(screen.getByRole('button', { name: 'Remove line 1' }).disabled).toBe(true);
+  });
+
+  it('ships from the location chosen, and leaves a blank line name to the product', async () => {
+    renderAt('/orders/new', { locale: 'sv' });
+    await screen.findByRole('heading', { name: 'Ny order' });
+    await screen.findByRole('option', { name: 'ST1 · Store' });
+
+    fillMinimalOrder();
+    type('Benämning', '', screen.getByRole('listitem', { name: 'Rad 1' }));
+    type('Skicka från', 'ST1');
+    fireEvent.click(screen.getByRole('button', { name: 'Skapa order' }));
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders', expect.objectContaining({ method: 'POST' })));
+    const [, { body }] = api.mock.calls.find(([path, options]) => path === '/api/orders' && options?.method === 'POST');
+    expect(body.location).toBe('ST1');
+    expect(body.lines[0]).not.toHaveProperty('name');
+  });
+
+  it('names the default location by leaving the choice empty', async () => {
+    renderAt('/orders/new', { locale: 'sv' });
+    await screen.findByRole('heading', { name: 'Ny order' });
+
+    fillMinimalOrder();
+    fireEvent.click(screen.getByRole('button', { name: 'Skapa order' }));
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders', expect.objectContaining({ method: 'POST' })));
+    const [, { body }] = api.mock.calls.find(([path, options]) => path === '/api/orders' && options?.method === 'POST');
+    expect(body).not.toHaveProperty('location');
   });
 });

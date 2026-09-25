@@ -7,10 +7,13 @@ namespace Kanso\Core\Internal\Application\Order;
 use Kanso\Core\Internal\Application\Exception\Conflict;
 use Kanso\Core\Internal\Application\Exception\NotFound;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface;
 use Kanso\Core\Internal\Domain\Common\Actor;
 use Kanso\Core\Internal\Domain\Common\ConcurrentModification;
 use Kanso\Core\Internal\Domain\Common\Page;
 use Kanso\Core\Internal\Domain\Common\TransactionInterface;
+use Kanso\Core\Internal\Domain\Inventory\Location;
+use Kanso\Core\Internal\Domain\Inventory\LocationStoreInterface;
 use Kanso\Core\Internal\Domain\Order\Channel;
 use Kanso\Core\Internal\Domain\Order\ChannelStoreInterface;
 use Kanso\Core\Internal\Domain\Order\NewOrderLine;
@@ -39,6 +42,10 @@ final class OrderService
     public function __construct(
         private readonly OrderStoreInterface $orders,
         private readonly ChannelStoreInterface $channels,
+        private readonly ProductStoreInterface $products,
+        private readonly LocationStoreInterface $locations,
+        private readonly DefaultLocation $defaultLocation,
+        private readonly OrderStock $stock,
         private readonly TransactionInterface $transaction,
         private readonly ClockInterface $clock,
     ) {
@@ -72,9 +79,10 @@ final class OrderService
         $billing = $check->address($input['billingAddress'] ?? null, 'billingAddress', false);
 
         $lines = $this->lines($input['lines'] ?? null, $check);
+        $location = $this->location($input['location'] ?? null, $check);
 
         $check->throwIfInvalid();
-        \assert(null !== $channel && null !== $currency && null !== $customerName && null !== $shipping);
+        \assert(null !== $channel && null !== $currency && null !== $customerName && null !== $shipping && null !== $location);
 
         $now = $this->clock->now();
         try {
@@ -82,6 +90,7 @@ final class OrderService
                 $this->orders->nextNumber(),
                 $channel,
                 $currency,
+                $location,
                 new OrderCustomer($customerId, $customerName, $customerEmail, $shipping, $billing),
                 $lines,
                 $placedAt ?? $now,
@@ -121,16 +130,46 @@ final class OrderService
             }
 
             $sku = $check->text($line['sku'] ?? null, $path.'.sku', 64);
-            $name = $check->text($line['name'] ?? null, $path.'.name', 255);
+            // Optional: the product's own name unless the order says otherwise.
+            $name = $check->text($line['name'] ?? null, $path.'.name', 255, false);
             $quantity = $check->integer($line['quantity'] ?? null, $path.'.quantity', 1, self::MAX_QUANTITY);
             $unitPrice = $check->integer($line['unitPrice'] ?? null, $path.'.unitPrice', 0, self::MAX_UNIT_PRICE);
 
-            if (null !== $sku && null !== $name && null !== $quantity && null !== $unitPrice) {
-                $lines[] = new NewOrderLine($sku, $name, $quantity, $unitPrice);
+            // Every line is for a product the catalogue has: that is what
+            // stock is reserved against when the order is confirmed.
+            $product = null === $sku ? null : $this->products->findBySku($sku);
+            if (null !== $sku && null === $product) {
+                $check->violate($path.'.sku', \sprintf('No product with SKU "%s".', $sku), 'unknown_sku');
+            }
+
+            if (null !== $product && null !== $quantity && null !== $unitPrice) {
+                $lines[] = new NewOrderLine($product, $name ?? $product->name(), $quantity, $unitPrice);
             }
         }
 
         return $lines;
+    }
+
+    /** The location the order names by code, or the installation's default. */
+    private function location(mixed $code, OrderInput $check): ?Location
+    {
+        $code = $check->text($code, 'location', 32, false);
+        if (null !== $code) {
+            $location = $this->locations->findByCode($code);
+            if (null === $location) {
+                $check->violate('location', \sprintf('No location "%s".', $code), 'unknown_location');
+            }
+
+            return $location;
+        }
+
+        try {
+            return $this->defaultLocation->get();
+        } catch (\DomainException $e) {
+            $check->violate('location', $e->getMessage(), 'no_default_location');
+
+            return null;
+        }
     }
 
     public function get(string $id): Order
@@ -161,21 +200,43 @@ final class OrderService
         }
 
         try {
-            $order->apply($move, $actor, $this->clock->now());
-        } catch (TransitionNotAllowed $e) {
-            throw new Conflict($e->getMessage(), [['path' => 'transition', 'message' => $e->getMessage(), 'code' => 'transition_not_allowed']]);
-        }
-
-        try {
-            // Commits the status change and its event together; the version
-            // check in the UPDATE fails if someone saved the order meanwhile.
-            $this->transaction->run(static fn (): null => null);
+            // The status, its event and the stock it moves commit together or
+            // not at all. The order's version check in the UPDATE fails if
+            // someone saved the order meanwhile, and takes the stock with it.
+            $this->transaction->run(fn () => $this->move($order, $move, $actor, $this->clock->now()));
         } catch (ConcurrentModification) {
             // Saved by someone else between our read and our write.
             throw $this->stale($order);
         }
 
         return $order;
+    }
+
+    private function move(Order $order, Transition $move, Actor $actor, \DateTimeImmutable $now): void
+    {
+        $heldStock = $order->holdsStock();
+
+        if (Transition::Confirm === $move && null === $order->location()) {
+            try {
+                $order->assignLocation($this->defaultLocation->get());
+            } catch (\DomainException $e) {
+                throw new ValidationFailed([['path' => 'location', 'message' => $e->getMessage(), 'code' => 'no_default_location']]);
+            }
+        }
+
+        try {
+            $order->apply($move, $actor, $now);
+        } catch (TransitionNotAllowed $e) {
+            throw new Conflict($e->getMessage(), [['path' => 'transition', 'message' => $e->getMessage(), 'code' => 'transition_not_allowed']]);
+        }
+
+        if (!$heldStock && $order->holdsStock()) {
+            $this->stock->reserve($order, $actor, $now);
+        } elseif ($heldStock && Transition::Ship === $move) {
+            $this->stock->ship($order, $actor, $now);
+        } elseif ($heldStock && !$order->holdsStock()) {
+            $this->stock->release($order, $actor, $now);
+        }
     }
 
     private function stale(Order $order): Conflict

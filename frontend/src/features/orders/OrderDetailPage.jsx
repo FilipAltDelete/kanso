@@ -55,6 +55,7 @@ function OrderDetail({ order }) {
         </div>
         <p className="text-sm text-slate-500">
           {t('orders.placedVia', { channel: order.channel.name })} · <time dateTime={order.placedAt}>{dateTime(order.placedAt)}</time>
+          {order.location ? <> · {t('orders.shipsFrom', { location: `${order.location.code} · ${order.location.name}` })}</> : null}
         </p>
       </div>
 
@@ -84,6 +85,7 @@ function OrderDetail({ order }) {
               <th scope="col" className="px-4 py-2 font-medium">{t('order.sku')}</th>
               <th scope="col" className="px-4 py-2 font-medium">{t('order.productName')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.quantity')}</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.reserved')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.unitPrice')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.lineTotal')}</th>
             </tr>
@@ -94,6 +96,7 @@ function OrderDetail({ order }) {
                 <td className="px-4 py-2 font-mono text-xs">{line.sku}</td>
                 <td className="px-4 py-2">{line.name}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{line.quantity}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{line.reservedQuantity}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{money(line.unitPrice)}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{money(line.lineTotal)}</td>
               </tr>
@@ -101,7 +104,7 @@ function OrderDetail({ order }) {
           </tbody>
           <tfoot>
             <tr>
-              <th scope="row" colSpan={4} className="px-4 py-2 text-right font-semibold">
+              <th scope="row" colSpan={5} className="px-4 py-2 text-right font-semibold">
                 {t('order.total')}
               </th>
               <td className="px-4 py-2 text-right font-semibold tabular-nums">{money(order.total)}</td>
@@ -174,11 +177,23 @@ function Transitions({ order }) {
         <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           {t('orders.changedElsewhere')}
         </p>
+      ) : transition.error?.violations?.some((violation) => violation.code === 'insufficient_stock') ? (
+        <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {t('orders.insufficientStock', { location: order.location?.code ?? '', skus: shortSkus(order, transition.error.violations).join(', ') })}
+        </p>
       ) : transition.error ? (
         <ErrorNotice error={transition.error} />
       ) : null}
     </section>
   );
+}
+
+/** The SKUs of the lines a stock conflict names (`lines[1].quantity` is the second line). */
+function shortSkus(order, violations) {
+  return violations
+    .filter((violation) => violation.code === 'insufficient_stock')
+    .map((violation) => order.lines[Number(/^lines\[(\d+)\]/.exec(violation.path)?.[1])]?.sku)
+    .filter(Boolean);
 }
 
 function Timeline({ events }) {

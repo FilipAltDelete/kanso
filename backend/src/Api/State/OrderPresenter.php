@@ -38,15 +38,19 @@ final class OrderPresenter
         }
 
         $resource->createdAt = $order->createdAt();
+        $location = $order->location();
+        $resource->location = null === $location ? null : ['id' => (string) $location->id(), 'code' => $location->code(), 'name' => $location->name()];
         $resource->shippingAddress = $order->shippingAddress();
         $resource->billingAddress = $order->billingAddress();
         foreach ($lines as $line) {
             $resource->lines[] = [
                 'id' => (string) $line->id(),
                 'position' => $line->position(),
+                'productId' => null === $line->product() ? null : (string) $line->product()->id(),
                 'sku' => $line->skuCode(),
                 'name' => $line->name(),
                 'quantity' => $line->quantity(),
+                'reservedQuantity' => $line->reservedQuantity(),
                 'unitPrice' => $line->unitPrice()->amount,
                 'lineTotal' => $line->lineTotal()->amount,
             ];

@@ -67,11 +67,12 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Products (SKU, name, barcode, weight in grams) and locations (code, name, address): REST API with search, sort and paging; product and location lists in the UI
 - [x] Stock per product and location (`available = on hand − reserved`, never negative), with an append-only movement history (who, what, when, before/after)
 - [x] Manual stock adjustments with reason codes: add/remove or set a counted quantity, one transaction each, optimistic locking (`expectedVersion`, 409 when stale); adjust-stock dialog on the product page
-- [ ] Creating and editing products and locations in the UI (API only for now); CSV import of products
+- [x] Creating and editing products and locations in the UI (dialogs, optimistic locking with reload on conflict); CSV import of products: upload, preview of what would change and of every failing row, then import; matched by SKU so the same file twice changes nothing; at most 5,000 rows / 1 MiB; `POST /api/product-imports` with `dryRun` (`docs/adr/0006`)
 - [x] Orders: channels (`manual` seeded), orders with lines copied on (SKU code, name, quantity, unit price in minor units) and the customer copied on; state machine with hold/release; an order event per change in the same transaction; optimistic locking (`version`, 409 when stale)
 - [x] Order REST API: create, list (status, channel, date range, search, sort, paging), detail with timeline, `POST /orders/{id}/transitions`
 - [x] Order UI: list with filters and saved view in the URL, detail with lines, addresses, actions and history, create-order form
-- [ ] Stock reservation on confirm (needs order lines linked to products); CSV order import; editing orders, partial cancel, notes and tags; payment status
+- [x] Stock reservation: order lines linked to products by SKU (unknown SKUs refused); confirm reserves, cancel releases, ship takes the stock off on hand, each in the status change's transaction; one location per order (named, or `KANSO_DEFAULT_LOCATION`); short stock is a 409 naming the lines; reserved quantity on the order page (`docs/adr/0005`)
+- [ ] CSV order import; editing orders, partial cancel, notes and tags; payment status
 
 ---
 

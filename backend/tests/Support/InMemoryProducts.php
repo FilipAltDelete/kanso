@@ -30,6 +30,18 @@ final class InMemoryProducts implements ProductStoreInterface
         return null;
     }
 
+    public function findBySkus(array $skus): array
+    {
+        $found = [];
+        foreach ($this->items as $product) {
+            if (\in_array($product->sku(), $skus, true)) {
+                $found[$product->sku()] = $product;
+            }
+        }
+
+        return $found;
+    }
+
     public function search(PageRequest $request): Page
     {
         return new Page(array_values($this->items), \count($this->items));

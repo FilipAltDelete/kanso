@@ -87,6 +87,15 @@ final class OrderResource
     #[Groups(['order:list'])]
     public string $currency = '';
 
+    /**
+     * Where the order's stock is reserved and shipped from.
+     *
+     * @var array{id: string, code: string, name: string}|null
+     */
+    #[ApiProperty(schema: Schemas::LOCATION_REF)]
+    #[Groups(['order:detail'])]
+    public ?array $location = null;
+
     /** Sum of the line totals, in minor units. */
     #[Groups(['order:list'])]
     public int $total = 0;

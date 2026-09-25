@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Kanso\Core\Tests\Unit\Order;
 
+use Kanso\Core\Internal\Domain\Catalog\Product;
 use Kanso\Core\Internal\Domain\Common\Actor;
+use Kanso\Core\Internal\Domain\Inventory\Address;
+use Kanso\Core\Internal\Domain\Inventory\Location;
 use Kanso\Core\Internal\Domain\Order\Channel;
 use Kanso\Core\Internal\Domain\Order\NewOrderLine;
 use Kanso\Core\Internal\Domain\Order\Order;
@@ -26,6 +29,11 @@ final class OrderTest extends TestCase
         $this->actor = new Actor('user-1', 'Ops');
     }
 
+    private function product(string $sku): Product
+    {
+        return new Product($sku, $sku, null, null, $this->now);
+    }
+
     /** @param list<NewOrderLine>|null $lines */
     private function order(?array $lines = null, string $currency = 'SEK'): Order
     {
@@ -33,8 +41,9 @@ final class OrderTest extends TestCase
             '10001',
             new Channel('manual', 'Manual', 'manual', 'SEK', $this->now),
             $currency,
+            new Location('WH1', 'Main', new Address(), $this->now),
             new OrderCustomer(null, 'Anna Andersson', 'anna@example.com', ['line1' => 'Storgatan 1', 'postalCode' => '111 22', 'city' => 'Stockholm', 'countryCode' => 'SE'], null),
-            $lines ?? [new NewOrderLine('TSHIRT-M', 'T-shirt, M', 3, 19_950), new NewOrderLine('SOCKS', 'Socks', 2, 4_900)],
+            $lines ?? [new NewOrderLine($this->product('TSHIRT-M'), 'T-shirt, M', 3, 19_950), new NewOrderLine($this->product('SOCKS'), 'Socks', 2, 4_900)],
             $this->now,
             $this->actor,
             $this->now,
@@ -56,17 +65,17 @@ final class OrderTest extends TestCase
 
     public function testAFreeLineIsAllowedButANegativePriceIsNot(): void
     {
-        self::assertSame(0, $this->order([new NewOrderLine('GIFT', 'Gift wrap', 1, 0)])->total()->amount);
+        self::assertSame(0, $this->order([new NewOrderLine($this->product('GIFT'), 'Gift wrap', 1, 0)])->total()->amount);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->order([new NewOrderLine('X', 'X', 1, -1)]);
+        $this->order([new NewOrderLine($this->product('X'), 'X', 1, -1)]);
     }
 
     public function testATotalPastTheIntegerRangeIsRefused(): void
     {
         $this->expectException(\OverflowException::class);
 
-        $this->order([new NewOrderLine('A', 'A', 2, intdiv(\PHP_INT_MAX, 2) + 1)]);
+        $this->order([new NewOrderLine($this->product('A'), 'A', 2, intdiv(\PHP_INT_MAX, 2) + 1)]);
     }
 
     public function testAnOrderNeedsLines(): void

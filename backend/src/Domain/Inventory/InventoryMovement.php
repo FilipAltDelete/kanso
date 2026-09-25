@@ -19,6 +19,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'inventory_movement')]
 #[ORM\Index(name: 'idx_inventory_movement_product', columns: ['product_id', 'occurred_at'])]
 #[ORM\Index(name: 'idx_inventory_movement_location', columns: ['location_id', 'occurred_at'])]
+#[ORM\Index(name: 'idx_inventory_movement_order', columns: ['order_id'])]
 class InventoryMovement
 {
     #[ORM\Id]
@@ -53,6 +54,14 @@ class InventoryMovement
 
     #[ORM\Column(name: 'reserved_after')]
     private int $reservedAfter;
+
+    /** The order that caused it, for reservations, releases and shipments. */
+    #[ORM\Column(name: 'order_id', type: UuidType::NAME, nullable: true)]
+    private ?Uuid $orderId = null;
+
+    /** The order's number as it was, so the history reads without a join. */
+    #[ORM\Column(name: 'order_number', length: 32, nullable: true)]
+    private ?string $orderNumber = null;
 
     #[ORM\Column(name: 'actor_id', length: 64)]
     private string $actorId;
@@ -98,6 +107,27 @@ class InventoryMovement
         return new self($level, MovementType::Adjustment, $reason, $note, $change, $actor, $occurredAt);
     }
 
+    /** A change an order made: a reservation, a release or a shipment. */
+    public static function forOrder(
+        MovementType $type,
+        InventoryLevel $level,
+        StockChange $change,
+        Uuid $orderId,
+        string $orderNumber,
+        Actor $actor,
+        \DateTimeImmutable $occurredAt,
+    ): self {
+        if (MovementType::Adjustment === $type) {
+            throw new \InvalidArgumentException('An adjustment has a reason, not an order.');
+        }
+
+        $movement = new self($level, $type, null, null, $change, $actor, $occurredAt);
+        $movement->orderId = $orderId;
+        $movement->orderNumber = $orderNumber;
+
+        return $movement;
+    }
+
     public function id(): Uuid
     {
         return $this->id;
@@ -131,6 +161,16 @@ class InventoryMovement
     public function change(): StockChange
     {
         return new StockChange($this->onHandBefore, $this->onHandAfter, $this->reservedBefore, $this->reservedAfter);
+    }
+
+    public function orderId(): ?Uuid
+    {
+        return $this->orderId;
+    }
+
+    public function orderNumber(): ?string
+    {
+        return $this->orderNumber;
     }
 
     public function actor(): Actor

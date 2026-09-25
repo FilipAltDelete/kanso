@@ -27,9 +27,11 @@ final class Schemas
         'properties' => [
             'id' => ['type' => 'string', 'format' => 'uuid'],
             'position' => ['type' => 'integer'],
+            'productId' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'Null only on lines placed before lines were linked to products'],
             'sku' => ['type' => 'string'],
             'name' => ['type' => 'string'],
             'quantity' => ['type' => 'integer'],
+            'reservedQuantity' => ['type' => 'integer', 'description' => 'Held in stock at the order\'s location: the whole quantity from confirmation until it ships or is cancelled, otherwise 0'],
             'unitPrice' => ['type' => 'integer', 'description' => 'Minor units'],
             'lineTotal' => ['type' => 'integer', 'description' => 'Minor units'],
         ],
@@ -37,12 +39,21 @@ final class Schemas
 
     public const array NEW_LINE = [
         'type' => 'object',
-        'required' => ['sku', 'name', 'quantity', 'unitPrice'],
+        'required' => ['sku', 'quantity', 'unitPrice'],
         'properties' => [
-            'sku' => ['type' => 'string', 'maxLength' => 64],
-            'name' => ['type' => 'string', 'maxLength' => 255],
+            'sku' => ['type' => 'string', 'maxLength' => 64, 'description' => 'A product\'s SKU; an unknown SKU is refused'],
+            'name' => ['type' => 'string', 'maxLength' => 255, 'description' => 'Default: the product\'s name'],
             'quantity' => ['type' => 'integer', 'minimum' => 1],
             'unitPrice' => ['type' => 'integer', 'minimum' => 0, 'description' => 'Minor units of the order currency'],
+        ],
+    ];
+
+    public const array LOCATION_REF = [
+        'type' => ['object', 'null'],
+        'properties' => [
+            'id' => ['type' => 'string', 'format' => 'uuid'],
+            'code' => ['type' => 'string'],
+            'name' => ['type' => 'string'],
         ],
     ];
 

@@ -1,14 +1,26 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Pencil, Plus } from 'lucide-react';
 import { useLocations } from '../../api/inventory.js';
-import { ErrorNotice } from '../../components/ui/primitives.jsx';
+import { Button, ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
 import { useI18n } from '../../lib/i18n.jsx';
+import { useCanEditCatalog } from './catalogForm.js';
+import { LocationFormDialog } from './LocationFormDialog.jsx';
 
-/** Warehouses and stores. Sorting, search and paging happen on the server. */
+/**
+ * Warehouses and stores. Sorting, search and paging happen on the server.
+ * Operators create locations here and edit one from its row (Enter on a
+ * focused row does the same).
+ */
 export function LocationsPage() {
   const { t, locale } = useI18n();
   const urlView = useUrlView({ defaults: { sorting: [{ id: 'code', desc: false }] } });
   const locations = useLocations(urlView.view);
+  const canEdit = useCanEditCatalog();
+  // `null` is closed, 'new' is creating, anything else is the location being edited.
+  const [open, setOpen] = useState(null);
+  // The row as last fetched, so a refetch after a 409 reaches the open form.
+  const editing = open && open !== 'new' ? (locations.data?.member.find((location) => location.id === open.id) ?? open) : null;
 
   const columns = useMemo(() => {
     const countries = new Intl.DisplayNames([locale], { type: 'region' });
@@ -29,14 +41,39 @@ export function LocationsPage() {
         enableSorting: false,
         cell: ({ getValue }) => (getValue() ? countries.of(getValue()) : ''),
       },
+      ...(canEdit
+        ? [
+            {
+              id: 'actions',
+              header: () => <span className="sr-only">{t('common.actions')}</span>,
+              meta: { label: t('common.actions'), align: 'end' },
+              enableSorting: false,
+              cell: ({ row }) => (
+                <Button variant="outline" size="sm" onClick={() => setOpen(row.original)}>
+                  <Pencil className="size-3.5" aria-hidden="true" />
+                  {t('locationForm.edit')}
+                  <span className="sr-only">{row.original.code}</span>
+                </Button>
+              ),
+            },
+          ]
+        : []),
     ];
-  }, [t, locale]);
+  }, [t, locale, canEdit]);
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t('locations.title')}</h1>
-        <p className="text-sm text-slate-500">{t('locations.subtitle')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">{t('locations.title')}</h1>
+          <p className="text-sm text-slate-500">{t('locations.subtitle')}</p>
+        </div>
+        {canEdit ? (
+          <Button onClick={() => setOpen('new')}>
+            <Plus className="size-4" aria-hidden="true" />
+            {t('locationForm.open')}
+          </Button>
+        ) : null}
       </div>
       {locations.error ? <ErrorNotice error={locations.error} /> : null}
       <DataTable
@@ -48,8 +85,11 @@ export function LocationsPage() {
         loading={locations.isPending}
         columns={columns}
         getRowId={(location) => location.id}
-        emptyMessage={t('locations.empty')}
+        onRowActivate={canEdit ? setOpen : undefined}
+        emptyMessage={t(canEdit ? 'locations.empty' : 'locations.emptyViewer')}
       />
+      {open === 'new' ? <LocationFormDialog onClose={() => setOpen(null)} /> : null}
+      {editing ? <LocationFormDialog key={editing.id} location={editing} onClose={() => setOpen(null)} /> : null}
     </div>
   );
 }

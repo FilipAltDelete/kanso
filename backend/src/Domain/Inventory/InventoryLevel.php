@@ -107,6 +107,20 @@ class InventoryLevel
         return $this->apply($this->onHand, $this->reserved - $quantity, $now);
     }
 
+    /**
+     * Stock that was reserved for an order leaves the building: on hand and
+     * reserved both go down, so available does not change.
+     */
+    public function consume(int $quantity, \DateTimeImmutable $now): StockChange
+    {
+        self::assertPositive($quantity);
+        if ($quantity > $this->reserved) {
+            throw new StockRuleViolated(\sprintf('Only %d reserved; cannot ship %d.', $this->reserved, $quantity), StockRuleViolated::OVER_RELEASE);
+        }
+
+        return $this->apply($this->onHand - $quantity, $this->reserved - $quantity, $now);
+    }
+
     public function id(): Uuid
     {
         return $this->id;

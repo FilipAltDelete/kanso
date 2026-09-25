@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Kanso\Core\Internal\Domain\Order;
 
 use Doctrine\ORM\Mapping as ORM;
+use Kanso\Core\Internal\Domain\Catalog\Product;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * One SKU on an order. The SKU code, name and price are copied, not linked:
- * the order keeps what was sold even when the catalogue changes. Linking to
- * products comes with the product catalogue.
+ * One SKU on an order. The SKU code, name and price are copied: the order
+ * keeps what was sold even when the catalogue changes. The line is also linked
+ * to its product, which is what stock is reserved against.
+ *
+ * `reservedQuantity` is how much of this line is held in stock at the order's
+ * location: all of it while the order is confirmed and not yet shipped, none
+ * otherwise. Only OrderStock changes it, in the transaction that changes the
+ * inventory level.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'order_line')]
@@ -27,6 +33,11 @@ class OrderLine
 
     #[ORM\Column]
     private int $position;
+
+    /** Null only on lines placed before order lines were linked to products. */
+    #[ORM\ManyToOne(targetEntity: Product::class)]
+    #[ORM\JoinColumn(name: 'product_id', nullable: true)]
+    private ?Product $product;
 
     #[ORM\Column(name: 'sku_code', length: 64)]
     private string $skuCode;
@@ -44,6 +55,9 @@ class OrderLine
     #[ORM\Column(name: 'line_total', type: 'bigint')]
     private int $lineTotal;
 
+    #[ORM\Column(name: 'reserved_quantity', options: ['default' => 0])]
+    private int $reservedQuantity = 0;
+
     public function __construct(Order $order, int $position, NewOrderLine $line)
     {
         if ($line->quantity < 1) {
@@ -56,7 +70,8 @@ class OrderLine
         $this->id = Uuid::v7();
         $this->order = $order;
         $this->position = $position;
-        $this->skuCode = $line->skuCode;
+        $this->product = $line->product;
+        $this->skuCode = $line->product->sku();
         $this->name = $line->name;
         $this->quantity = $line->quantity;
         $this->unitPrice = $line->unitPrice;
@@ -71,6 +86,31 @@ class OrderLine
     public function position(): int
     {
         return $this->position;
+    }
+
+    public function product(): ?Product
+    {
+        return $this->product;
+    }
+
+    public function reservedQuantity(): int
+    {
+        return $this->reservedQuantity;
+    }
+
+    /** The whole line is now held in stock. */
+    public function markReserved(): void
+    {
+        if (0 !== $this->reservedQuantity) {
+            throw new \LogicException(\sprintf('Line %d is already reserved.', $this->position));
+        }
+        $this->reservedQuantity = $this->quantity;
+    }
+
+    /** What was held is no longer: released, or shipped. */
+    public function clearReservation(): void
+    {
+        $this->reservedQuantity = 0;
     }
 
     public function skuCode(): string

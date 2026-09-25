@@ -5,6 +5,7 @@ import { OrderDetailPage } from '../features/orders/OrderDetailPage.jsx';
 import { OrderListPage } from '../features/orders/OrderListPage.jsx';
 import { LocationsPage } from '../features/inventory/LocationsPage.jsx';
 import { ProductDetailPage } from '../features/inventory/ProductDetailPage.jsx';
+import { ProductImportPage } from '../features/inventory/ProductImportPage.jsx';
 import { ProductsPage } from '../features/inventory/ProductsPage.jsx';
 import { SettingsPage } from '../features/settings/SettingsPage.jsx';
 import { useI18n } from '../lib/i18n.jsx';
@@ -31,6 +32,9 @@ const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/set
 
 const productsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products', component: ProductsPage });
 
+// A literal segment outranks a parameter, so /products/import never reads as a product id.
+const productImportRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products/import', component: ProductImportPage });
+
 const productRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products/$productId', component: ProductDetailPage });
 
 const locationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/locations', component: LocationsPage });
@@ -54,4 +58,4 @@ const devRoutes = import.meta.env.DEV
   : [];
 
 // Orders, inventory, products and customers get their routes in Phase 1 (ROADMAP.md).
-export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, ...orderRoutes, productsRoute, productRoute, locationsRoute, settingsRoute, ...devRoutes]) });
+export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, ...orderRoutes, productsRoute, productImportRoute, productRoute, locationsRoute, settingsRoute, ...devRoutes]) });

@@ -22,6 +22,9 @@ x-app-env: &app-env
   # Empty means the development default: admin / admin. Refused in prod.
   KANSO_ADMIN_EMAIL: "${KANSO_ADMIN_EMAIL:-}"
   KANSO_ADMIN_PASSWORD: "${KANSO_ADMIN_PASSWORD:-}"
+  # Code of the location orders reserve stock from when they name none. Empty:
+  # the only location, if there is exactly one.
+  KANSO_DEFAULT_LOCATION: "${KANSO_DEFAULT_LOCATION:-}"
   # Base64-encoded PEM keypair; `make keys` generates one into .env.
   JWT_SECRET_KEY: "${JWT_SECRET_KEY:-}"
   JWT_PUBLIC_KEY: "${JWT_PUBLIC_KEY:-}"

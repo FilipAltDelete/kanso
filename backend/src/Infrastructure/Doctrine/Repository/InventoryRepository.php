@@ -6,7 +6,9 @@ namespace Kanso\Core\Internal\Infrastructure\Doctrine\Repository;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
 use Kanso\Core\Internal\Domain\Catalog\Product;
 use Kanso\Core\Internal\Domain\Common\Page;
@@ -34,6 +36,24 @@ final class InventoryRepository implements InventoryStoreInterface
     public function findLevelById(string $id): ?InventoryLevel
     {
         return Uuid::isValid($id) ? $this->em->find(InventoryLevel::class, Uuid::fromString($id)) : null;
+    }
+
+    public function lockLevel(Product $product, Location $location): ?InventoryLevel
+    {
+        $level = $this->em->createQueryBuilder()
+            ->select('i')
+            ->from(InventoryLevel::class, 'i')
+            ->where('i.product = :product AND i.location = :location')
+            ->setParameter('product', $product->id(), UuidType::NAME)
+            ->setParameter('location', $location->id(), UuidType::NAME)
+            ->getQuery()
+            // SELECT … FOR UPDATE, and overwrite whatever an earlier read left
+            // in the identity map: the locked row is the only truth here.
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->setHint(Query::HINT_REFRESH, true)
+            ->getOneOrNullResult();
+
+        return $level instanceof InventoryLevel ? $level : null;
     }
 
     public function levels(PageRequest $request): Page

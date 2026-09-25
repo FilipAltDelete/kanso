@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Pencil, SlidersHorizontal } from 'lucide-react';
 import { useAllLocations, useInventoryLevels, useMovements, useProduct } from '../../api/inventory.js';
 import { Badge, Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatChange, formatQuantity, formatWeight } from '../../lib/quantity.js';
 import { AdjustStockDialog } from './AdjustStockDialog.jsx';
+import { ProductFormDialog } from './ProductFormDialog.jsx';
 import { stockPerLocation } from './stockRows.js';
 
 const CAN_ADJUST = ['ROLE_ADMIN', 'ROLE_OPERATOR'];
@@ -28,6 +29,7 @@ export function ProductDetailPage() {
   const historyView = useUrlView({ prefix: 'h.' });
   const history = useMovements(productId, historyView.view);
   const [adjusting, setAdjusting] = useState(null);
+  const [editing, setEditing] = useState(false);
 
   const stockRows = useMemo(() => stockPerLocation(locations.data ?? [], levels.data ?? []), [levels.data, locations.data]);
 
@@ -107,7 +109,19 @@ export function ProductDetailPage() {
         cell: ({ row }) => t('history.fromTo', { from: formatQuantity(row.original.onHandBefore, locale), to: formatQuantity(row.original.onHandAfter, locale) }),
       },
       { accessorKey: 'actorName', header: t('history.by'), enableSorting: false },
-      { accessorKey: 'note', header: t('history.note'), enableSorting: false, cell: ({ getValue }) => getValue() ?? '' },
+      {
+        accessorKey: 'note',
+        header: t('history.note'),
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.orderId ? (
+            <Link to="/orders/$orderId" params={{ orderId: row.original.orderId }} className="underline-offset-2 hover:underline">
+              {t('history.order', { number: row.original.orderNumber })}
+            </Link>
+          ) : (
+            (row.original.note ?? '')
+          ),
+      },
     ],
     [t, locale, dateTime],
   );
@@ -136,7 +150,15 @@ export function ProductDetailPage() {
     <div className="space-y-6">
       <div className="space-y-1">
         <BackLink />
-        <h1 className="text-xl font-semibold">{p.name}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-xl font-semibold">{p.name}</h1>
+          {canAdjust ? (
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              <Pencil className="size-4" aria-hidden="true" />
+              {t('productForm.edit')}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <Card className="p-4">
@@ -185,6 +207,8 @@ export function ProductDetailPage() {
           emptyMessage={t('productDetail.noHistory')}
         />
       </section>
+
+      {editing ? <ProductFormDialog product={p} onClose={() => setEditing(false)} /> : null}
 
       {adjusting ? (
         <AdjustStockDialog

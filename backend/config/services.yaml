@@ -14,6 +14,8 @@ services:
             $environment: '%kernel.environment%'
             $loginLimiter: '@limiter.login'
             $apiKeyLimiter: '@limiter.api_key'
+            # The code of the location orders reserve from when they name none.
+            $defaultLocationCode: '%env(string:default::KANSO_DEFAULT_LOCATION)%'
 
     # A gauge is read at scrape time; implementing the interface is what puts
     # it on `/metrics`.

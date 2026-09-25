@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useAllLocations } from '../../api/inventory.js';
 import { useChannels, useCreateOrder } from '../../api/orders.js';
 import { Button, Card, Checkbox, ErrorNotice, Input, Select } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
@@ -23,9 +24,12 @@ export function CreateOrderPage() {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const channels = useChannels();
+  const locations = useAllLocations();
   const create = useCreateOrder();
 
   const [channel, setChannel] = useState('manual');
+  // Empty: the installation's default location decides.
+  const [location, setLocation] = useState('');
   const [currency, setCurrency] = useState('');
   const [customer, setCustomer] = useState({ name: '', email: '' });
   const [shipping, setShipping] = useState(EMPTY_ADDRESS);
@@ -63,6 +67,7 @@ export function CreateOrderPage() {
     const body = {
       channel,
       ...(currency ? { currency } : {}),
+      ...(location ? { location } : {}),
       customer: compact(customer),
       shippingAddress: { ...compact(shipping), countryCode: shipping.countryCode.trim().toUpperCase() },
       ...(billingSame ? {} : { billingAddress: { ...compact(billing), countryCode: billing.countryCode.trim().toUpperCase() } }),
@@ -71,7 +76,8 @@ export function CreateOrderPage() {
         if (unitPrice === null) problems[`lines[${index}].unitPrice`] = t('orderForm.priceInvalid');
         const quantity = Number(line.quantity);
 
-        return { sku: line.sku.trim(), name: line.name.trim(), quantity: Number.isInteger(quantity) ? quantity : line.quantity, unitPrice };
+        // A blank name is left out: the product's own name is used.
+        return { sku: line.sku.trim(), ...(line.name.trim() ? { name: line.name.trim() } : {}), quantity: Number.isInteger(quantity) ? quantity : line.quantity, unitPrice };
       }),
     };
 
@@ -100,6 +106,18 @@ export function CreateOrderPage() {
               {(channels.data ?? [{ code: 'manual', name: 'Manual' }]).map((option) => (
                 <option key={option.code} value={option.code}>
                   {option.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label={t('orderForm.location')} error={errors.location}>
+          {(props) => (
+            <Select {...props} value={location} onChange={(event) => setLocation(event.target.value)}>
+              <option value="">{t('orderForm.defaultLocation')}</option>
+              {(locations.data ?? []).map((option) => (
+                <option key={option.id} value={option.code}>
+                  {option.code} · {option.name}
                 </option>
               ))}
             </Select>
@@ -152,8 +170,8 @@ export function CreateOrderPage() {
                 <Field label={t('order.sku')} required error={errors[`${path}.sku`]}>
                   {(props) => <Input {...props} className="font-mono" value={line.sku} onChange={(event) => updateLine(line.key, { sku: event.target.value })} />}
                 </Field>
-                <Field label={t('order.productName')} required error={errors[`${path}.name`]}>
-                  {(props) => <Input {...props} value={line.name} onChange={(event) => updateLine(line.key, { name: event.target.value })} />}
+                <Field label={t('order.productName')} error={errors[`${path}.name`]}>
+                  {(props) => <Input {...props} value={line.name} placeholder={t('orderForm.nameHint')} onChange={(event) => updateLine(line.key, { name: event.target.value })} />}
                 </Field>
                 <Field label={t('order.quantity')} required error={errors[`${path}.quantity`]}>
                   {(props) => <Input {...props} type="number" min={1} step={1} value={line.quantity} onChange={(event) => updateLine(line.key, { quantity: event.target.value })} />}

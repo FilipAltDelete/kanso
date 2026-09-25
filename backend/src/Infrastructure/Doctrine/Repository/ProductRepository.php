@@ -27,6 +27,23 @@ final class ProductRepository implements ProductStoreInterface
         return $this->em->getRepository(Product::class)->findOneBy(['sku' => $sku]);
     }
 
+    public function findBySkus(array $skus): array
+    {
+        $found = [];
+        // In slices, so a large import stays well inside max_allowed_packet.
+        foreach (array_chunk(array_values(array_unique($skus)), 1000) as $slice) {
+            /** @var list<Product> $products */
+            $products = $this->em->createQueryBuilder()->select('p')->from(Product::class, 'p')
+                ->where('p.sku IN (:skus)')->setParameter('skus', $slice)
+                ->getQuery()->getResult();
+            foreach ($products as $product) {
+                $found[$product->sku()] = $product;
+            }
+        }
+
+        return $found;
+    }
+
     public function search(PageRequest $request): Page
     {
         $qb = $this->em->createQueryBuilder()->select('p')->from(Product::class, 'p');

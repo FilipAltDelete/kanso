@@ -17,6 +17,13 @@ interface ProductStoreInterface
     public function findBySku(string $sku): ?Product;
 
     /**
+     * @param list<string> $skus
+     *
+     * @return array<string, Product> the products that exist, keyed by SKU
+     */
+    public function findBySkus(array $skus): array;
+
+    /**
      * Search matches the start of the SKU, any part of the name, or the whole barcode.
      *
      * @return Page<Product>

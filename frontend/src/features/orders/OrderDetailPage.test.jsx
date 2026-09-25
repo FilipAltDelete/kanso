@@ -88,4 +88,39 @@ describe('the order detail', () => {
 
     expect(await screen.findByText('There is no such order.')).toBeTruthy();
   });
+
+  it('shows where the order ships from and what each line holds in stock', async () => {
+    api.mockResolvedValue(
+      orderFixture({
+        status: 'confirmed',
+        location: { id: 'loc1', code: 'WH1', name: 'Main' },
+        lines: orderFixture().lines.map((line) => ({ ...line, reservedQuantity: line.quantity })),
+      }),
+    );
+    renderAt('/orders/o1');
+
+    expect(await screen.findByText(/Ships from WH1 · Main/)).toBeTruthy();
+    const lines = screen.getByRole('table', { name: 'Lines' });
+    const reserved = within(lines).getAllByRole('columnheader').map((cell) => cell.textContent).indexOf('Reserved');
+    expect(reserved).toBeGreaterThan(-1);
+    const rows = within(lines).getAllByRole('row').slice(1, 3);
+    expect(rows.map((row) => row.querySelectorAll('td')[reserved].textContent)).toEqual(['3', '2']);
+  });
+
+  it('says which lines are short when confirming fails on stock', async () => {
+    api.mockResolvedValueOnce(orderFixture({ location: { id: 'loc1', code: 'WH1', name: 'Main' } })).mockRejectedValueOnce(
+      Object.assign(new Error('Not enough stock'), {
+        status: 409,
+        violations: [{ path: 'lines[1].quantity', message: 'SOCKS: 1 available at WH1, 2 needed.', code: 'insufficient_stock' }],
+      }),
+    );
+    renderAt('/orders/o1');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Not enough stock at WH1');
+    expect(alert.textContent).toContain('SOCKS');
+    expect(alert.textContent).not.toContain('TSHIRT-M');
+  });
 });

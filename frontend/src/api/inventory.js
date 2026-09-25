@@ -51,6 +51,9 @@ export const movementSchema = z.object({
   type: z.string(),
   reason: z.enum(ADJUSTMENT_REASONS).nullable(),
   note: z.string().nullable(),
+  // The order behind a reservation, release or shipment.
+  orderId: z.string().nullish(),
+  orderNumber: z.string().nullish(),
   locationId: z.string(),
   locationCode: z.string(),
   locationName: z.string(),
@@ -145,5 +148,88 @@ export function useAdjustStock(productId) {
   return useMutation({
     mutationFn: async (body) => movementSchema.parse(await api('/api/stock-adjustments', { method: 'POST', body: { ...body, productId } })),
     onSettled: refresh,
+  });
+}
+
+/** The catalog changed: every product and location list refetches. */
+function useCatalogRefresh(key) {
+  const queryClient = useQueryClient();
+
+  return () => queryClient.invalidateQueries({ queryKey: [key] });
+}
+
+export function useCreateProduct() {
+  const refresh = useCatalogRefresh('products');
+
+  return useMutation({
+    mutationFn: async (body) => productSchema.parse(await api('/api/products', { method: 'POST', body })),
+    onSuccess: refresh,
+  });
+}
+
+/** An edit carries the version it was based on; a 409 means someone saved in between, and the product is refetched. */
+export function useUpdateProduct(id) {
+  const queryClient = useQueryClient();
+  const refresh = useCatalogRefresh('products');
+
+  return useMutation({
+    mutationFn: async (body) =>
+      productSchema.parse(await api(`/api/products/${encodeURIComponent(id)}`, { method: 'PATCH', body, headers: { 'Content-Type': 'application/merge-patch+json' } })),
+    onSuccess: (product) => {
+      queryClient.setQueryData(['product', id], product);
+      refresh();
+    },
+    onError: (error) => {
+      if (error.status === 409) queryClient.invalidateQueries({ queryKey: ['product', id] });
+    },
+  });
+}
+
+export function useCreateLocation() {
+  const refresh = useCatalogRefresh('locations');
+
+  return useMutation({
+    mutationFn: async (body) => locationSchema.parse(await api('/api/locations', { method: 'POST', body })),
+    onSuccess: refresh,
+  });
+}
+
+export function useUpdateLocation(id) {
+  const refresh = useCatalogRefresh('locations');
+
+  return useMutation({
+    mutationFn: async (body) =>
+      locationSchema.parse(await api(`/api/locations/${encodeURIComponent(id)}`, { method: 'PATCH', body, headers: { 'Content-Type': 'application/merge-patch+json' } })),
+    // After a 409 too: the list then shows the version the next attempt must send.
+    onSettled: refresh,
+  });
+}
+
+/** The server's limits for one product CSV (ProductImporter); checked here first so a too-large file is never sent. */
+export const IMPORT_MAX_BYTES = 1024 * 1024;
+export const IMPORT_MAX_ROWS = 5000;
+
+export const importResultSchema = z.object({
+  dryRun: z.boolean(),
+  rows: z.number().int(),
+  created: z.number().int(),
+  updated: z.number().int(),
+  unchanged: z.number().int(),
+  failed: z.number().int(),
+  errors: z.array(z.object({ row: z.number().int(), sku: z.string().nullable(), field: z.string(), code: z.string(), message: z.string() })),
+});
+
+/** `{ file, dryRun }`: a dry run is the preview, and writes nothing. */
+export function useImportProducts() {
+  const refresh = useCatalogRefresh('products');
+
+  return useMutation({
+    mutationFn: async ({ file, dryRun }) =>
+      importResultSchema.parse(
+        await api(`/api/product-imports?dryRun=${dryRun ? 'true' : 'false'}`, { method: 'POST', body: file, headers: { 'Content-Type': 'text/csv' } }),
+      ),
+    onSuccess: (result) => {
+      if (!result.dryRun) refresh();
+    },
   });
 }

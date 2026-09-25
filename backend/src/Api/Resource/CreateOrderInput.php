@@ -18,6 +18,9 @@ final class CreateOrderInput
     #[ApiProperty(description: 'ISO 4217; default the channel currency.', schema: ['type' => 'string', 'pattern' => '^[A-Z]{3}$'])]
     public mixed $currency = null;
 
+    #[ApiProperty(description: 'Code of the location stock is reserved and shipped from; default the installation\'s default location.', schema: ['type' => 'string'])]
+    public mixed $location = null;
+
     #[ApiProperty(description: 'When the customer placed the order; default now.', schema: ['type' => 'string', 'format' => 'date-time'])]
     public mixed $placedAt = null;
 

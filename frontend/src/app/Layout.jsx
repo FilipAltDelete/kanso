@@ -1,86 +1,207 @@
-import { Link, Outlet } from '@tanstack/react-router';
-import { LayoutDashboard, LogOut, Package, Settings, ShoppingCart, Users, Warehouse } from 'lucide-react';
-import { Badge, Button } from '../components/ui/primitives.jsx';
+import { useState } from 'react';
+import { Outlet, useRouterState } from '@tanstack/react-router';
+import {
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  Package,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  ShoppingCart,
+  Upload,
+  Users,
+  Wrench,
+} from 'lucide-react';
+import { Button } from '../components/ui/primitives.jsx';
 import { useAuth } from '../features/auth/AuthProvider.jsx';
 import { useI18n } from '../lib/i18n.jsx';
+import { cn } from '../lib/utils.js';
 import { LanguageSelect } from './LanguageSelect.jsx';
+import { NavFolder, NavLink, UpcomingLink } from './nav/NavLink.jsx';
+import { activeHref, loadCollapsed, loadFolders, saveCollapsed, saveFolders } from './nav/navState.js';
 
-/** Modules that exist. */
-const live = [
-  { to: '/orders', key: 'nav.orders', icon: ShoppingCart },
-  { to: '/products', key: 'nav.products', icon: Package },
-  { to: '/locations', key: 'nav.locations', icon: Warehouse },
+/** The pages of each folder; the icons are what the collapsed rail shows. */
+const FOLDERS = [
+  {
+    id: 'inventory',
+    labelKey: 'nav.inventory',
+    items: [
+      { href: '/products', labelKey: 'nav.products', icon: Package },
+      { href: '/locations', labelKey: 'nav.locations', icon: MapPin },
+    ],
+  },
 ];
 
-/** Modules on the roadmap, shown so the shape of the app is visible; they become links as they land. */
-const upcoming = [
-  { key: 'nav.customers', icon: Users },
-];
+const ADMIN_TOOLS = [{ href: '/products/import', labelKey: 'nav.importProducts', icon: Upload }];
 
+const HREFS = ['/', '/orders', '/settings', ...FOLDERS.flatMap((folder) => folder.items.map((item) => item.href)), ...ADMIN_TOOLS.map((item) => item.href)];
+
+/**
+ * The signed-in shell: the menu on the left, as in Pimsen, and the page. The
+ * menu folds to a rail of icons; both that and its open folders are
+ * remembered in this browser.
+ */
 export function Layout() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const active = activeHref(pathname, HREFS);
+  const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const [folders, setFolders] = useState(loadFolders);
+  // Hiding a link is a courtesy; the API's voters are what refuse.
+  const isAdmin = user?.roles?.includes('ROLE_ADMIN') ?? false;
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      saveCollapsed(!current);
+      return !current;
+    });
+  }
+
+  const isOpen = (id, fallback = true) => folders[id] ?? fallback;
+
+  function toggleFolder(id, fallback = true) {
+    setFolders((current) => {
+      const next = { ...current, [id]: !(current[id] ?? fallback) };
+      saveFolders(next);
+      return next;
+    });
+  }
+
+  const name = user?.name ?? user?.email ?? '';
+  const brand = t('app.name');
 
   return (
-    <div className="flex min-h-full flex-col md:flex-row">
-      <aside className="border-b border-slate-200 bg-white md:w-60 md:shrink-0 md:border-b-0 md:border-r">
-        <div className="px-4 py-4 text-base font-semibold">{t('app.name')}</div>
-        <nav aria-label={t('nav.main')} className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:pb-4">
-          <Link
-            to="/"
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-            activeProps={{ className: 'bg-slate-100 font-medium text-slate-900' }}
-            activeOptions={{ exact: true }}
+    <div className="flex h-dvh overflow-hidden bg-slate-50">
+      <nav
+        aria-label={t('nav.main')}
+        className={cn('flex shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-150', collapsed ? 'w-14' : 'w-60')}
+      >
+        <div className={cn('flex items-start gap-2 border-b border-slate-200 py-4', collapsed ? 'flex-col items-center px-2' : 'px-4')}>
+          {collapsed ? (
+            <p className="flex size-8 items-center justify-center rounded-md bg-slate-100 font-semibold text-slate-900" title={`${brand} — ${name}`}>
+              {brand.slice(0, 1)}
+            </p>
+          ) : (
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-slate-900">{brand}</p>
+              <p className="truncate text-xs text-slate-500" title={user?.email}>
+                {name}
+              </p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
+            title={collapsed ? t('nav.expand') : t('nav.collapse')}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           >
-            <LayoutDashboard className="size-4" aria-hidden="true" />
-            {t('nav.dashboard')}
-          </Link>
-          {live.map(({ to, key, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              className="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-              activeProps={{ className: 'bg-slate-100 font-medium text-slate-900' }}
-            >
-              <Icon className="size-4" aria-hidden="true" />
-              {t(key)}
-            </Link>
-          ))}
-          {upcoming.map(({ key, icon: Icon }) => (
-            <span
-              key={key}
-              aria-disabled="true"
-              className="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-400"
-            >
-              <Icon className="size-4" aria-hidden="true" />
-              {t(key)}
-              <Badge className="ml-auto">{t('nav.comingSoon')}</Badge>
-            </span>
-          ))}
-          <Link
-            to="/settings"
-            className="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 md:mt-4"
-            activeProps={{ className: 'bg-slate-100 font-medium text-slate-900' }}
-          >
-            <Settings className="size-4" aria-hidden="true" />
-            {t('nav.settings')}
-          </Link>
-        </nav>
-      </aside>
+            {collapsed ? <PanelLeftOpen aria-hidden="true" className="size-4" /> : <PanelLeftClose aria-hidden="true" className="size-4" />}
+          </button>
+        </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-end gap-3 border-b border-slate-200 bg-white px-4 py-2">
-          <LanguageSelect />
-          <span className="truncate text-sm text-slate-600">{user?.name ?? user?.email}</span>
-          <Button variant="ghost" size="sm" onClick={logout}>
-            <LogOut className="size-4" aria-hidden="true" />
-            {t('auth.signOut')}
+        <div className={cn('flex-1 overflow-y-auto overflow-x-hidden', collapsed ? 'space-y-1 px-2 py-2' : 'p-2')}>
+          <NavLink href="/" icon={LayoutDashboard} active={active === '/'} collapsed={collapsed}>
+            {t('nav.dashboard')}
+          </NavLink>
+
+          {collapsed ? (
+            <hr className="my-2 border-slate-200" />
+          ) : (
+            <p className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">{t('nav.operations')}</p>
+          )}
+
+          <NavLink href="/orders" icon={ShoppingCart} active={active === '/orders'} collapsed={collapsed}>
+            {t('nav.orders')}
+          </NavLink>
+
+          {FOLDERS.map((folder) => {
+            const links = folder.items.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                icon={item.icon}
+                nested
+                active={active === item.href}
+                collapsed={collapsed}
+              >
+                {t(item.labelKey)}
+              </NavLink>
+            ));
+
+            // On the rail a folder is nothing but its pages' icons.
+            if (collapsed) return links;
+
+            return (
+              <NavFolder
+                key={folder.id}
+                label={t(folder.labelKey)}
+                open={isOpen(folder.id)}
+                onToggle={() => toggleFolder(folder.id)}
+                containsActive={folder.items.some((item) => item.href === active)}
+              >
+                {links}
+              </NavFolder>
+            );
+          })}
+
+          <UpcomingLink icon={Users} collapsed={collapsed} note={t('nav.comingSoon')}>
+            {t('nav.customers')}
+          </UpcomingLink>
+        </div>
+
+        <div className={cn('border-t border-slate-200', collapsed ? 'space-y-1 px-2 py-2' : 'p-2')}>
+          {isAdmin ? (
+            collapsed ? (
+              ADMIN_TOOLS.map((item) => (
+                <NavLink key={item.href} href={item.href} icon={item.icon} active={active === item.href} collapsed>
+                  {t(item.labelKey)}
+                </NavLink>
+              ))
+            ) : (
+              <NavFolder
+                icon={Wrench}
+                label={t('nav.adminTools')}
+                open={isOpen('admin', false)}
+                onToggle={() => toggleFolder('admin', false)}
+                containsActive={ADMIN_TOOLS.some((item) => item.href === active)}
+              >
+                {ADMIN_TOOLS.map((item) => (
+                  <NavLink key={item.href} href={item.href} icon={item.icon} nested active={active === item.href}>
+                    {t(item.labelKey)}
+                  </NavLink>
+                ))}
+              </NavFolder>
+            )
+          ) : null}
+          <NavLink href="/settings" icon={Settings} active={active === '/settings'} collapsed={collapsed}>
+            {t('nav.settings')}
+          </NavLink>
+          {collapsed ? null : (
+            <div className="px-3 py-1">
+              <LanguageSelect />
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={logout}
+            title={collapsed ? t('auth.signOut') : undefined}
+            aria-label={collapsed ? t('auth.signOut') : undefined}
+            className={cn('w-full', collapsed ? 'justify-center px-0' : 'justify-start')}
+          >
+            <LogOut aria-hidden="true" className="size-4" />
+            {collapsed ? null : t('auth.signOut')}
           </Button>
-        </header>
-        <main className="flex-1 p-4 md:p-6">
-          <Outlet />
-        </main>
-      </div>
+        </div>
+      </nav>
+
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
+        <Outlet />
+      </main>
     </div>
   );
 }

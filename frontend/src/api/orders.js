@@ -38,14 +38,19 @@ export const orderSummarySchema = z.object({
 export const orderSchema = orderSummarySchema.extend({
   createdAt: z.string(),
   shippingAddress: addressSchema,
+  // Where stock is reserved and shipped from; absent only on orders placed before orders had one.
+  location: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullish(),
   billingAddress: addressSchema.nullish(),
   lines: z.array(
     z.object({
       id: z.string(),
       position: z.number().int(),
+      productId: z.string().nullish(),
       sku: z.string(),
       name: z.string(),
       quantity: z.number().int(),
+      // Held in stock at the order's location: all of the line from confirm until ship or cancel.
+      reservedQuantity: z.number().int().default(0),
       unitPrice: minor,
       lineTotal: minor,
     }),

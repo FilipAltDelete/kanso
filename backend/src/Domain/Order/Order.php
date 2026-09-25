@@ -8,6 +8,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Kanso\Core\Internal\Domain\Common\Actor;
+use Kanso\Core\Internal\Domain\Inventory\Location;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
@@ -22,6 +23,9 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'sales_order')]
 class Order
 {
+    /** The statuses in which the order's stock is reserved. */
+    private const array HOLDING_STOCK = [OrderStatus::Confirmed, OrderStatus::Allocated, OrderStatus::Picking, OrderStatus::Packed];
+
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME)]
     private Uuid $id;
@@ -42,6 +46,14 @@ class Order
 
     #[ORM\Column(length: 3)]
     private string $currency;
+
+    /**
+     * Where the order's stock is reserved and shipped from: one location per
+     * order in Phase 1. Null only on orders placed before orders had one.
+     */
+    #[ORM\ManyToOne(targetEntity: Location::class)]
+    #[ORM\JoinColumn(name: 'location_id', nullable: true)]
+    private ?Location $location;
 
     #[ORM\Column(name: 'customer_id', type: UuidType::NAME, nullable: true)]
     private ?Uuid $customerId;
@@ -88,7 +100,7 @@ class Order
     private Collection $events;
 
     /** @param list<NewOrderLine> $lines */
-    private function __construct(string $number, Channel $channel, string $currency, OrderCustomer $customer, array $lines, \DateTimeImmutable $placedAt, \DateTimeImmutable $now)
+    private function __construct(string $number, Channel $channel, string $currency, Location $location, OrderCustomer $customer, array $lines, \DateTimeImmutable $placedAt, \DateTimeImmutable $now)
     {
         if ([] === $lines) {
             throw new \InvalidArgumentException('An order needs at least one line.');
@@ -99,6 +111,7 @@ class Order
         $this->channel = $channel;
         $this->status = OrderStatus::Pending;
         $this->currency = Money::zero($currency)->currency;
+        $this->location = $location;
         $this->customerId = null === $customer->id ? null : Uuid::fromString($customer->id);
         $this->customerName = $customer->name;
         $this->customerEmail = $customer->email;
@@ -124,13 +137,14 @@ class Order
         string $number,
         Channel $channel,
         string $currency,
+        Location $location,
         OrderCustomer $customer,
         array $lines,
         \DateTimeImmutable $placedAt,
         Actor $actor,
         \DateTimeImmutable $now,
     ): self {
-        $order = new self($number, $channel, $currency, $customer, $lines, $placedAt, $now);
+        $order = new self($number, $channel, $currency, $location, $customer, $lines, $placedAt, $now);
         $order->events->add(new OrderEvent($order, OrderEvent::CREATED, null, $actor, null, $order->snapshot(), $now));
 
         return $order;
@@ -144,10 +158,8 @@ class Order
             throw new TransitionNotAllowed($this->status, $transition);
         }
 
-        // TODO(inventory): confirming must reserve stock in this same
-        // transaction (CLAUDE.md). Deferred until Product and InventoryLevel
-        // exist; until then confirm changes the status only.
-
+        // Stock follows the status (OrderStock), in the same transaction;
+        // this method changes the status and records it, nothing else.
         $before = $this->statusState();
         $this->heldFrom = OrderStatus::OnHold === $target ? $this->status : null;
         $this->status = $target;
@@ -157,6 +169,25 @@ class Order
         $this->events->add($event);
 
         return $event;
+    }
+
+    /**
+     * Whether this order has stock held for it: from confirmation until it
+     * ships or is cancelled, and while on hold from one of those statuses.
+     */
+    public function holdsStock(): bool
+    {
+        return \in_array($this->status, self::HOLDING_STOCK, true)
+            || (OrderStatus::OnHold === $this->status && \in_array($this->heldFrom, self::HOLDING_STOCK, true));
+    }
+
+    /** For an order placed before orders had a location; set when it is first confirmed. */
+    public function assignLocation(Location $location): void
+    {
+        if (null !== $this->location) {
+            throw new \LogicException(\sprintf('Order %s already has a location.', $this->number));
+        }
+        $this->location = $location;
     }
 
     /** @return list<Transition> */
@@ -211,6 +242,11 @@ class Order
     public function currency(): string
     {
         return $this->currency;
+    }
+
+    public function location(): ?Location
+    {
+        return $this->location;
     }
 
     public function customerId(): ?Uuid

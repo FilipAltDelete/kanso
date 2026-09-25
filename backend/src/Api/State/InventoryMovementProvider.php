@@ -43,6 +43,8 @@ final class InventoryMovementProvider implements ProviderInterface
         $resource->type = $movement->type()->value;
         $resource->reason = $movement->reason()?->value;
         $resource->note = $movement->note();
+        $resource->orderId = $movement->orderId()?->toRfc4122();
+        $resource->orderNumber = $movement->orderNumber();
         $resource->productId = $movement->product()->id()->toRfc4122();
         $resource->sku = $movement->product()->sku();
         $resource->productName = $movement->product()->name();
