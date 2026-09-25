@@ -28,8 +28,11 @@ export function ShipDialog({ order, onClose }) {
   const [quantities, setQuantities] = useState(() => Object.fromEntries(open.map((line) => [line.id, String(line.quantity - line.shippedQuantity - line.cancelledQuantity)])));
   const [carrier, setCarrier] = useState('');
   const [tracking, setTracking] = useState('');
-  // When the parcel left, in the operator's local time; now, unless it was handed over earlier.
+  // When the parcel left, in the operator's local time; now, unless it was
+  // handed over earlier. Untouched, it is not sent at all: the field only has
+  // minutes, and the server's "now" is exact.
   const [shippedAt, setShippedAt] = useState(() => localDateTime(new Date()));
+  const [shippedAtChanged, setShippedAtChanged] = useState(false);
   const shippedAtId = useId();
   const [touched, setTouched] = useState(false);
 
@@ -63,7 +66,7 @@ export function ShipDialog({ order, onClose }) {
         lines: rows.filter((row) => row.value > 0).map((row) => ({ lineId: row.line.id, quantity: row.value })),
         ...(carrier.trim() ? { carrier: carrier.trim() } : {}),
         ...(tracking.trim() ? { trackingNumber: tracking.trim() } : {}),
-        ...(shippedAt ? { shippedAt: new Date(shippedAt).toISOString() } : {}),
+        ...(shippedAtChanged && shippedAt ? { shippedAt: new Date(shippedAt).toISOString() } : {}),
       },
       { onSuccess: () => dialogRef.current?.close() },
     );
@@ -147,7 +150,11 @@ export function ShipDialog({ order, onClose }) {
             <label htmlFor={shippedAtId} className="mb-1 block text-sm font-medium">
               {t('ship.shippedAt')}
             </label>
-            <Input id={shippedAtId} type="datetime-local" value={shippedAt} max={localDateTime(new Date())} onChange={(event) => setShippedAt(event.target.value)} />
+            <Input id={shippedAtId} type="datetime-local" value={shippedAt} max={localDateTime(new Date())} onChange={(event) => {
+                setShippedAt(event.target.value);
+                setShippedAtChanged(true);
+              }}
+            />
           </div>
           <div>
             <label htmlFor={carrierId} className="mb-1 block text-sm font-medium">

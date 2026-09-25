@@ -84,8 +84,8 @@ describe('shipping an order', () => {
     await waitFor(() => expect(api).toHaveBeenCalledWith('/api/orders/o1/shipments', expect.objectContaining({ method: 'POST' })));
     const [, { body }] = api.mock.calls.find(([path]) => path === '/api/orders/o1/shipments');
     expect(body).toMatchObject({ version: 3, lines: [{ lineId: 'l1', quantity: 1 }], carrier: 'DHL', trackingNumber: 'JD0123' });
-    // When it left: now, unless changed, sent as an instant.
-    expect(Math.abs(new Date(body.shippedAt).getTime() - Date.now())).toBeLessThan(2 * 60 * 1000);
+    // Left alone, the time is not sent: the server's now is exact to the second.
+    expect(body).not.toHaveProperty('shippedAt');
   });
 
   it('sends the time the parcel left when it was earlier', async () => {

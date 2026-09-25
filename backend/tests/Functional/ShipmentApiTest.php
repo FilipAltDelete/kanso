@@ -267,7 +267,11 @@ final class ShipmentApiTest extends WebTestCase
         $problem = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 1]], 'shippedAt' => '2001-01-01T00:00:00Z']);
         self::assertSame(['shippedAt' => 'before_placed'], array_column($problem['violations'], 'code', 'path'));
 
-        $shipped = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 1]], 'shippedAt' => new \DateTimeImmutable()->format(\DATE_ATOM)]);
+        // The minute the order was placed, as a person types it (no seconds):
+        // allowed, though the order was placed some seconds into that minute.
+        $placed = new \DateTimeImmutable((string) $order['placedAt']);
+        $sameMinute = $placed->setTime((int) $placed->format('H'), (int) $placed->format('i'));
+        $shipped = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $order['version'], 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 1]], 'shippedAt' => $sameMinute->format(\DATE_ATOM)]);
         self::assertSame(201, $this->responseStatus());
         self::assertNotEmpty($shipped['shipments'][0]['shippedAt']);
     }

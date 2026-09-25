@@ -375,7 +375,7 @@ final class OrderService
         // (a few minutes' grace for clocks that disagree).
         if (null !== $shippedAt && $shippedAt > $this->clock->now()->modify('+5 minutes')) {
             $check->violate('shippedAt', 'A shipment cannot have left in the future.', 'in_future');
-        } elseif (null !== $shippedAt && $shippedAt < $order->placedAt()) {
+        } elseif (null !== $shippedAt && $shippedAt < self::toMinute($order->placedAt())) {
             $check->violate('shippedAt', 'A shipment cannot have left before the order was placed.', 'before_placed');
         }
         $lines = $this->shipmentLines($input['lines'] ?? null, $order, $check);
@@ -476,6 +476,12 @@ final class OrderService
         }
 
         return $order;
+    }
+
+    /** A time as a person types it: to the minute. */
+    private static function toMinute(\DateTimeImmutable $time): \DateTimeImmutable
+    {
+        return $time->setTime((int) $time->format('H'), (int) $time->format('i'));
     }
 
     /** @return array{Order, Shipment} */
