@@ -215,7 +215,8 @@ export function Layout() {
         </div>
       </nav>
 
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
+      {/* A flex column, so a list page can fill it and let only its table scroll (DataTable `fill`). */}
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-4 md:p-6">
         <Outlet />
       </main>
     </div>

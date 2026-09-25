@@ -122,7 +122,7 @@ export function OrderListPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{t('orders.title')}</h1>
@@ -156,6 +156,7 @@ export function OrderListPage() {
 
       <DataTable
         {...urlView}
+        fill
         manual
         label={t('orders.title')}
         data={orders.data?.member ?? []}

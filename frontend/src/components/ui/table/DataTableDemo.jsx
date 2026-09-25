@@ -74,7 +74,7 @@ export function DataTableDemo() {
   }, [t, locale]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">{t('tableDemo.title')}</h1>
         <p className="text-sm text-slate-500">{t('tableDemo.subtitle')}</p>
@@ -84,6 +84,7 @@ export function DataTableDemo() {
       </p>
       <DataTable
         {...urlView}
+        fill
         label={t('tableDemo.caption')}
         data={data}
         columns={columns}
