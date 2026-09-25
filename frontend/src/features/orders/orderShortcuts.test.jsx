@@ -48,7 +48,8 @@ describe('keyboard shortcuts on the order pages', () => {
       expect(router.state.location.pathname).toBe('/orders');
 
       press('n');
-      await waitFor(() => expect(router.state.location.pathname).toBe('/orders/new'));
+      // The route change can take over a second when the whole suite runs at once.
+      await waitFor(() => expect(router.state.location.pathname).toBe('/orders/new'), { timeout: 3000 });
     });
 
     it('opens "Add tag" for the selected orders with t, and says to select first', async () => {

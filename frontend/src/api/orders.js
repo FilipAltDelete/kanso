@@ -60,8 +60,10 @@ export const orderSchema = orderSummarySchema.extend({
       quantity: z.number().int(),
       // Held in stock at the order's location: all of the line from confirm until ship or cancel.
       reservedQuantity: z.number().int().default(0),
-      // Units that have left in shipments; reserved + shipped = quantity while the order holds stock.
+      // Units that have left in shipments; reserved + shipped + cancelled = quantity while the order holds stock.
       shippedQuantity: z.number().int().default(0),
+      // Units cancelled by a partial cancel; still counted in quantity, not in lineTotal.
+      cancelledQuantity: z.number().int().default(0),
       unitPrice: minor,
       lineTotal: minor,
     }),
@@ -98,7 +100,16 @@ export const orderSchema = orderSummarySchema.extend({
     .default([]),
   // Whether a shipment can be recorded now: confirmed to packed, not on hold, units left.
   canShip: z.boolean().default(false),
+  // Whether it can be edited now: pending, confirmed or allocated (or on hold from one), nothing shipped.
+  canEdit: z.boolean().default(false),
+  // Whether some units can be cancelled now: not shipped, delivered or cancelled, and units left.
+  canCancelItems: z.boolean().default(false),
 });
+
+/** Units of a line still to ship: neither shipped nor cancelled. */
+export function unitsLeft(line) {
+  return line.quantity - line.shippedQuantity - line.cancelledQuantity;
+}
 
 export const orderPageSchema = z.object({
   member: z.array(orderSummarySchema),
@@ -302,6 +313,19 @@ export function useChangeTags(id) {
 /** `{ paymentStatus, version }`. */
 export function useChangePaymentStatus(id) {
   return useOrderChange(id, 'payment-status');
+}
+
+/**
+ * `{ version, lines?, customer?, shippingAddress?, billingAddress? }`; fields left out are unchanged.
+ * `lines` are changes: `{ lineId, quantity }` (0 removes) or `{ sku, quantity, unitPrice, name? }`.
+ */
+export function useEditOrder(id) {
+  return useOrderChange(id, 'edits');
+}
+
+/** `{ version, lines: [{ lineId, quantity }], reason? }`: a partial cancel. */
+export function useCancelItems(id) {
+  return useOrderChange(id, 'cancellations');
 }
 
 /** `{ orders, add, remove }`: the same tag change on many orders, all or none. */
