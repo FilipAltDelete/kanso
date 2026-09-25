@@ -31,7 +31,8 @@ final class Schemas
             'sku' => ['type' => 'string'],
             'name' => ['type' => 'string'],
             'quantity' => ['type' => 'integer'],
-            'reservedQuantity' => ['type' => 'integer', 'description' => 'Held in stock at the order\'s location: the whole quantity from confirmation until it ships or is cancelled, otherwise 0'],
+            'reservedQuantity' => ['type' => 'integer', 'description' => 'Held in stock at the order\'s location: from confirmation until it ships or is cancelled, otherwise 0. reservedQuantity + shippedQuantity = quantity while the order holds stock'],
+            'shippedQuantity' => ['type' => 'integer', 'description' => 'Units that have left in shipments'],
             'unitPrice' => ['type' => 'integer', 'description' => 'Minor units'],
             'lineTotal' => ['type' => 'integer', 'description' => 'Minor units'],
         ],
@@ -48,6 +49,34 @@ final class Schemas
         ],
     ];
 
+    public const array NEW_SHIPMENT_LINE = [
+        'type' => 'object',
+        'required' => ['lineId', 'quantity'],
+        'properties' => [
+            'lineId' => ['type' => 'string', 'format' => 'uuid', 'description' => 'An order line\'s id'],
+            'quantity' => ['type' => 'integer', 'minimum' => 1, 'description' => 'At most what the line has left to ship'],
+        ],
+    ];
+
+    public const array SHIPMENT = [
+        'type' => 'object',
+        'properties' => [
+            'id' => ['type' => 'string', 'format' => 'uuid'],
+            'location' => ['type' => 'object', 'properties' => ['code' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+            'carrier' => ['type' => ['string', 'null']],
+            'trackingNumber' => ['type' => ['string', 'null']],
+            'shippedAt' => ['type' => 'string', 'format' => 'date-time'],
+            'actor' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']]],
+            'lines' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
+                'lineId' => ['type' => 'string', 'format' => 'uuid'],
+                'position' => ['type' => 'integer'],
+                'sku' => ['type' => 'string'],
+                'name' => ['type' => 'string'],
+                'quantity' => ['type' => 'integer'],
+            ]]],
+        ],
+    ];
+
     public const array LOCATION_REF = [
         'type' => ['object', 'null'],
         'properties' => [
@@ -61,7 +90,7 @@ final class Schemas
         'type' => 'object',
         'properties' => [
             'id' => ['type' => 'string', 'format' => 'uuid'],
-            'type' => ['type' => 'string', 'enum' => ['created', 'transition']],
+            'type' => ['type' => 'string', 'enum' => ['created', 'transition', 'shipment']],
             'transition' => ['type' => ['string', 'null']],
             'actor' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string'], 'name' => ['type' => 'string']]],
             'before' => ['type' => ['object', 'null']],

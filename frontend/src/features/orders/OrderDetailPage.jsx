@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Truck } from 'lucide-react';
 import { useOrder, useTransitionOrder } from '../../api/orders.js';
 import { Button, Card, ErrorNotice, Spinner } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
 import { formatMoney } from '../../lib/money.js';
 import { PrintDocuments } from './PrintDocuments.jsx';
+import { ShipDialog } from './ShipDialog.jsx';
 import { StatusBadge, useCanOperate, useDateTime } from './shared.jsx';
 
 /** Transitions that end or pause the order ask once more before they run. */
@@ -55,12 +56,15 @@ function OrderDetail({ order }) {
           {order.heldFrom ? <span className="text-sm text-slate-600">{t('orders.heldFrom', { status: t(`orderStatus.${order.heldFrom}`) })}</span> : null}
         </div>
         <p className="text-sm text-slate-500">
-          {t('orders.placedVia', { channel: order.channel.name })} · <time dateTime={order.placedAt}>{dateTime(order.placedAt)}</time>
+          {t('orders.placedVia', { channel: order.channel.name })}
+          {order.externalReference ? <> ({t('orders.externalReference', { reference: order.externalReference })})</> : null} · <time dateTime={order.placedAt}>{dateTime(order.placedAt)}</time>
           {order.location ? <> · {t('orders.shipsFrom', { location: `${order.location.code} · ${order.location.name}` })}</> : null}
         </p>
       </div>
 
       <Transitions order={order} />
+
+      <ShipAction order={order} />
 
       <PrintDocuments order={order} />
 
@@ -89,6 +93,7 @@ function OrderDetail({ order }) {
               <th scope="col" className="px-4 py-2 font-medium">{t('order.productName')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.quantity')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.reserved')}</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.shipped')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.unitPrice')}</th>
               <th scope="col" className="px-4 py-2 text-right font-medium">{t('order.lineTotal')}</th>
             </tr>
@@ -100,6 +105,7 @@ function OrderDetail({ order }) {
                 <td className="px-4 py-2">{line.name}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{line.quantity}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{line.reservedQuantity}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{line.shippedQuantity}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{money(line.unitPrice)}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{money(line.lineTotal)}</td>
               </tr>
@@ -107,7 +113,7 @@ function OrderDetail({ order }) {
           </tbody>
           <tfoot>
             <tr>
-              <th scope="row" colSpan={5} className="px-4 py-2 text-right font-semibold">
+              <th scope="row" colSpan={6} className="px-4 py-2 text-right font-semibold">
                 {t('order.total')}
               </th>
               <td className="px-4 py-2 text-right font-semibold tabular-nums">{money(order.total)}</td>
@@ -115,6 +121,8 @@ function OrderDetail({ order }) {
           </tfoot>
         </table>
       </Card>
+
+      <Shipments shipments={order.shipments} />
 
       <Timeline events={order.events} />
     </div>
@@ -216,7 +224,12 @@ function Timeline({ events }) {
             <p className="text-sm text-slate-900">
               {event.type === 'created'
                 ? t('orderEvent.created')
-                : t('orderEvent.transition', { transition: t(`orderTransition.${event.transition}`), from: status(event.before), to: status(event.after) })}
+                : event.type === 'shipment'
+                  ? t('orderEvent.shipment', {
+                      units: (event.after?.lines ?? []).reduce((sum, line) => sum + (line.quantity ?? 0), 0),
+                      tracking: [event.after?.carrier, event.after?.trackingNumber].filter(Boolean).join(' ') || t('shipment.noTracking'),
+                    })
+                  : t('orderEvent.transition', { transition: t(`orderTransition.${event.transition}`), from: status(event.before), to: status(event.after) })}
             </p>
             <p className="text-xs text-slate-500">
               {event.actor.name} · <time dateTime={event.occurredAt}>{dateTime(event.occurredAt)}</time>
@@ -224,6 +237,59 @@ function Timeline({ events }) {
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+/** The "Ship" button, for operators, while the order has units that can ship. */
+function ShipAction({ order }) {
+  const { t } = useI18n();
+  const canOperate = useCanOperate();
+  const [open, setOpen] = useState(false);
+
+  if (!canOperate || !order.canShip) return null;
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <Truck className="size-4" aria-hidden="true" />
+        {t('ship.open')}
+      </Button>
+      {open ? <ShipDialog order={order} onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
+/** What has left, parcel by parcel. */
+function Shipments({ shipments }) {
+  const { t } = useI18n();
+  const dateTime = useDateTime();
+
+  if (shipments.length === 0) return null;
+
+  return (
+    <section aria-labelledby="order-shipments" className="space-y-2">
+      <h2 id="order-shipments" className="text-sm font-semibold text-slate-900">
+        {t('shipment.title')}
+      </h2>
+      <ul className="space-y-2">
+        {[...shipments].reverse().map((shipment) => (
+          <li key={shipment.id}>
+            <Card className="p-3 text-sm">
+              <p className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium">{shipment.carrier ?? t('shipment.noCarrier')}</span>
+                {shipment.trackingNumber ? <span className="font-mono">{shipment.trackingNumber}</span> : <span className="text-slate-500">{t('shipment.noTracking')}</span>}
+              </p>
+              <p className="text-slate-700">
+                {shipment.lines.map((line) => t('shipment.line', { quantity: line.quantity, sku: line.sku })).join(', ')}
+              </p>
+              <p className="text-xs text-slate-500">
+                {t('shipment.from', { location: shipment.location.code })} · {shipment.actor.name} · <time dateTime={shipment.shippedAt}>{dateTime(shipment.shippedAt)}</time>
+              </p>
+            </Card>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

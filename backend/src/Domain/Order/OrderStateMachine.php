@@ -8,6 +8,7 @@ namespace Kanso\Core\Internal\Domain\Order;
  * The order lifecycle, as a table:
  *
  *   pending → confirmed → allocated → picking → packed → shipped → delivered
+ *   ship:    from any of confirmed … packed, applied by the last shipment
  *   cancel:  any status before shipped (on_hold included) → cancelled
  *   hold:    any status before shipped → on_hold, remembering where it was
  *   release: on_hold → the status it was held from
@@ -24,8 +25,19 @@ final class OrderStateMachine
         'allocate' => [OrderStatus::Confirmed, OrderStatus::Allocated],
         'start_picking' => [OrderStatus::Allocated, OrderStatus::Picking],
         'pack' => [OrderStatus::Picking, OrderStatus::Packed],
-        'ship' => [OrderStatus::Packed, OrderStatus::Shipped],
         'deliver' => [OrderStatus::Shipped, OrderStatus::Delivered],
+    ];
+
+    /**
+     * Where an order can ship from: any status in which it holds stock. Not
+     * every merchant records picking and packing, and the last shipment is
+     * what moves an order to shipped (Order::ship(), ADR-0009).
+     */
+    public const array SHIPPABLE = [
+        OrderStatus::Confirmed,
+        OrderStatus::Allocated,
+        OrderStatus::Picking,
+        OrderStatus::Packed,
     ];
 
     /** Statuses an order can be put on hold from, and so returned to. */
@@ -51,6 +63,7 @@ final class OrderStateMachine
             Transition::Cancel => \in_array($from, self::HOLDABLE, true) || OrderStatus::OnHold === $from ? OrderStatus::Cancelled : null,
             Transition::Hold => \in_array($from, self::HOLDABLE, true) ? OrderStatus::OnHold : null,
             Transition::Release => OrderStatus::OnHold === $from && \in_array($heldFrom, self::HOLDABLE, true) ? $heldFrom : null,
+            Transition::Ship => \in_array($from, self::SHIPPABLE, true) ? OrderStatus::Shipped : null,
             default => self::FORWARD[$transition->value][0] === $from ? self::FORWARD[$transition->value][1] : null,
         };
     }

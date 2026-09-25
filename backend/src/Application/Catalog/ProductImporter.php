@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Kanso\Core\Internal\Application\Catalog;
 
 use Kanso\Core\Internal\Application\Exception\Conflict;
-use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Application\Import\Collation;
+use Kanso\Core\Internal\Application\Import\CsvFile;
 use Kanso\Core\Internal\Domain\Catalog\Product;
 use Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface;
 use Kanso\Core\Internal\Domain\Common\ConcurrentModification;
@@ -27,12 +28,11 @@ use Psr\Clock\ClockInterface;
  */
 final class ProductImporter
 {
-    public const int MAX_ROWS = 5000;
-    /** The proxy's `client_max_body_size`; a larger body never reaches PHP. */
-    public const int MAX_BYTES = 1024 * 1024;
+    public const int MAX_ROWS = CsvFile::MAX_ROWS;
+    public const int MAX_BYTES = CsvFile::MAX_BYTES;
 
-    /** Header spellings, folded (see header()), to the field they fill. */
-    private const array COLUMNS = ['sku' => 'sku', 'name' => 'name', 'barcode' => 'barcode', 'weightgrams' => 'weightGrams'];
+    /** Field => the column that holds it. */
+    private const array COLUMNS = ['sku' => 'sku', 'name' => 'name', 'barcode' => 'barcode', 'weightGrams' => 'weightGrams'];
     private const array REQUIRED = ['sku', 'name'];
 
     public function __construct(
@@ -44,7 +44,7 @@ final class ProductImporter
 
     public function import(string $csv, bool $dryRun): ProductImportResult
     {
-        [$columns, $records] = $this->read($csv);
+        $file = CsvFile::read($csv, self::COLUMNS, self::REQUIRED);
 
         $errors = [];
         /** @var array<int, array{sku: string, name: string, barcode?: ?string, weightGrams?: ?int}> $valid row number => values */
@@ -52,9 +52,9 @@ final class ProductImporter
         /** @var array<string, int> $seen folded SKU => the row it was first seen on */
         $seen = [];
 
-        foreach ($records as $row => $cells) {
+        foreach (array_keys($file->rows) as $row) {
             $rowErrors = [];
-            $values = $this->values($columns, $cells, $rowErrors);
+            $values = self::values($file, $row, $rowErrors);
             $sku = $values['sku'] ?? null;
 
             if (null !== $values) {
@@ -63,7 +63,7 @@ final class ProductImporter
                 }
             }
             if (null !== $sku && '' !== $sku) {
-                $key = self::fold($sku);
+                $key = Collation::key($sku);
                 if (isset($seen[$key])) {
                     $rowErrors[] = ['sku', 'duplicate', \sprintf('The SKU is also on row %d; each SKU can be on one row only.', $seen[$key])];
                 } else {
@@ -84,13 +84,13 @@ final class ProductImporter
         // an existing SKU, not a new product; it is reported, not guessed at.
         $existing = [];
         foreach ($this->products->findBySkus(array_column($valid, 'sku')) as $product) {
-            $existing[self::fold($product->sku())] = $product;
+            $existing[Collation::key($product->sku())] = $product;
         }
 
         $creates = $updates = [];
         $unchanged = 0;
         foreach ($valid as $row => $values) {
-            $product = $existing[self::fold($values['sku'])] ?? null;
+            $product = $existing[Collation::key($values['sku'])] ?? null;
             if (null === $product) {
                 $creates[] = $values;
             } elseif ($product->sku() !== $values['sku']) {
@@ -110,7 +110,7 @@ final class ProductImporter
 
         return new ProductImportResult(
             $dryRun,
-            \count($records),
+            \count($file->rows),
             \count($creates),
             \count($updates),
             $unchanged,
@@ -120,118 +120,19 @@ final class ProductImporter
     }
 
     /**
-     * The header and the data rows, keyed by row number. Problems with the
-     * file as a whole are a 422 and nothing is imported: `path` is `file`, or
-     * `header.<column>` for a problem with one column.
+     * One row as product fields, or null when the row cannot be read.
      *
-     * @return array{array<int, string>, array<int, list<?string>>} column index => field, and row number => cells
-     */
-    private function read(string $csv): array
-    {
-        if (\strlen($csv) > self::MAX_BYTES) {
-            self::fileError('too_large', \sprintf('The file is larger than %d bytes.', self::MAX_BYTES));
-        }
-        if (str_starts_with($csv, "\u{FEFF}")) {
-            $csv = substr($csv, 3);
-        }
-        if (!mb_check_encoding($csv, 'UTF-8')) {
-            self::fileError('encoding', 'The file is not UTF-8. In Excel, save it as "CSV UTF-8".');
-        }
-
-        $stream = fopen('php://temp', 'r+');
-        \assert(false !== $stream);
-        fwrite($stream, $csv);
-        rewind($stream);
-        $delimiter = self::delimiter($csv);
-
-        $header = null;
-        $records = [];
-        $row = 0;
-        while (false !== ($cells = fgetcsv($stream, null, $delimiter, '"', ''))) {
-            ++$row;
-            if ([null] === $cells) {
-                continue; // a blank line
-            }
-            if (null === $header) {
-                $header = $cells;
-                continue;
-            }
-            if (self::MAX_ROWS === \count($records)) {
-                fclose($stream);
-                self::fileError('too_many_rows', \sprintf('The file has more than %d rows. Split it into smaller files.', self::MAX_ROWS));
-            }
-            $records[$row] = $cells;
-        }
-        fclose($stream);
-
-        if (null === $header) {
-            self::fileError('empty', 'The file is empty.');
-        }
-        if ([] === $records) {
-            self::fileError('no_rows', 'The file has a header but no rows.');
-        }
-
-        return [$this->header($header), $records];
-    }
-
-    /**
-     * @param list<?string> $cells
-     *
-     * @return array<int, string>
-     */
-    private function header(array $cells): array
-    {
-        $columns = [];
-        $violations = [];
-        foreach ($cells as $index => $cell) {
-            $name = trim((string) $cell);
-            if ('' === $name) {
-                continue; // spreadsheet padding; a value under it is caught per row
-            }
-            $field = self::COLUMNS[strtolower(str_replace([' ', '_', '-'], '', $name))] ?? null;
-            if (null === $field) {
-                $violations[] = ['path' => 'header.'.$name, 'message' => \sprintf('Unknown column "%s". The columns are sku, name, barcode and weightGrams.', $name), 'code' => 'unknown_column'];
-            } elseif (\in_array($field, $columns, true)) {
-                $violations[] = ['path' => 'header.'.$name, 'message' => \sprintf('The column "%s" appears twice.', $name), 'code' => 'duplicate_column'];
-            } else {
-                $columns[$index] = $field;
-            }
-        }
-        foreach (self::REQUIRED as $field) {
-            if (!\in_array($field, $columns, true)) {
-                $violations[] = ['path' => 'header.'.$field, 'message' => \sprintf('The column "%s" is missing.', $field), 'code' => 'missing_column'];
-            }
-        }
-        if ([] !== $violations) {
-            throw new ValidationFailed($violations);
-        }
-
-        return $columns;
-    }
-
-    /**
-     * One row's cells as field values, or null when the row cannot be read.
-     *
-     * @param array<int, string>                  $columns
-     * @param list<?string>                       $cells
-     * @param list<array{string, string, string}> $errors  field, code, message
+     * @param list<array{string, string, string}> $errors field, code, message
      *
      * @return array{sku: string, name: string, barcode?: ?string, weightGrams?: ?int}|null
      */
-    private function values(array $columns, array $cells, array &$errors): ?array
+    private static function values(CsvFile $file, int $row, array &$errors): ?array
     {
-        // Spreadsheets pad rows with empty cells; only a value outside the named columns is a problem.
-        foreach ($cells as $index => $cell) {
-            if (!isset($columns[$index]) && '' !== trim((string) $cell)) {
-                $errors[] = ['row', 'stray_cell', \sprintf('Column %d has a value but no header.', $index + 1)];
+        $byField = $file->values($row);
+        if (null === $byField) {
+            $errors[] = CsvFile::strayCell();
 
-                return null;
-            }
-        }
-
-        $byField = [];
-        foreach ($columns as $index => $field) {
-            $byField[$field] = trim((string) ($cells[$index] ?? ''));
+            return null;
         }
 
         $values = ['sku' => $byField['sku'] ?? '', 'name' => $byField['name'] ?? ''];
@@ -292,29 +193,5 @@ final class ProductImporter
         } catch (ConcurrentModification) {
             throw new Conflict('Some of these products were changed or created by someone else during the import. Nothing was imported; run the import again.');
         }
-    }
-
-    /** Excel writes ";" where the decimal separator is a comma, as in Swedish; others write ",". */
-    private static function delimiter(string $csv): string
-    {
-        $firstLine = strtok($csv, "\r\n");
-        $firstLine = false === $firstLine ? '' : $firstLine;
-        $counts = [',' => substr_count($firstLine, ','), ';' => substr_count($firstLine, ';'), "\t" => substr_count($firstLine, "\t")];
-        arsort($counts);
-
-        return (string) array_key_first($counts);
-    }
-
-    /** A SKU as MySQL's utf8mb4_0900_ai_ci collation compares it: without case or accents. */
-    private static function fold(string $sku): string
-    {
-        $decomposed = \Normalizer::normalize($sku, \Normalizer::FORM_D);
-
-        return mb_strtolower((string) preg_replace('/\p{Mn}+/u', '', false === $decomposed ? $sku : $decomposed));
-    }
-
-    private static function fileError(string $code, string $message): never
-    {
-        throw new ValidationFailed([['path' => 'file', 'message' => $message, 'code' => $code]]);
     }
 }

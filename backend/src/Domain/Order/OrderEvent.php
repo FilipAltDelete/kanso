@@ -20,6 +20,7 @@ class OrderEvent
 {
     public const string CREATED = 'created';
     public const string TRANSITION = 'transition';
+    public const string SHIPMENT = 'shipment';
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME)]

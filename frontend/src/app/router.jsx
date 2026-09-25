@@ -5,6 +5,7 @@ import { CustomersPage } from '../features/customers/CustomersPage.jsx';
 import { DashboardPage } from '../features/dashboard/DashboardPage.jsx';
 import { CreateOrderPage } from '../features/orders/CreateOrderPage.jsx';
 import { OrderDetailPage } from '../features/orders/OrderDetailPage.jsx';
+import { OrderImportPage } from '../features/orders/OrderImportPage.jsx';
 import { OrderListPage } from '../features/orders/OrderListPage.jsx';
 import { LocationsPage } from '../features/inventory/LocationsPage.jsx';
 import { ProductDetailPage } from '../features/inventory/ProductDetailPage.jsx';
@@ -44,8 +45,9 @@ const locationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/lo
 
 const orderRoutes = [
   createRoute({ getParentRoute: () => rootRoute, path: '/orders', component: OrderListPage }),
-  // A literal segment outranks a parameter, so /orders/new never reads as an order id.
+  // A literal segment outranks a parameter, so /orders/new and /orders/import never read as an order id.
   createRoute({ getParentRoute: () => rootRoute, path: '/orders/new', component: CreateOrderPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/orders/import', component: OrderImportPage }),
   createRoute({ getParentRoute: () => rootRoute, path: '/orders/$orderId', component: OrderDetailPage }),
 ];
 

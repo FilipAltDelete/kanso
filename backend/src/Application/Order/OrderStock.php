@@ -16,10 +16,12 @@ use Kanso\Core\Internal\Domain\Inventory\MovementType;
 use Kanso\Core\Internal\Domain\Inventory\StockChange;
 use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderLine;
+use Kanso\Core\Internal\Domain\Order\Shipment;
+use Kanso\Core\Internal\Domain\Order\ShipmentLine;
 
 /**
- * An order's stock, which follows its status: reserved when it is confirmed,
- * released when it is cancelled, taken off on hand when it ships.
+ * An order's stock: reserved when it is confirmed, released when it is
+ * cancelled, taken off on hand shipment by shipment.
  *
  * Every method must run inside the transaction that changes the order's
  * status, so the two commit together or not at all. The levels involved are
@@ -95,10 +97,22 @@ final class OrderStock
         $this->settle($order, MovementType::Release, $actor, $now);
     }
 
-    /** What the order held leaves the building: on hand and reserved both go down. */
-    public function ship(Order $order, Actor $actor, \DateTimeImmutable $now): void
+    /**
+     * What a shipment took leaves the building: on hand and reserved both go
+     * down by each line's quantity, so available does not move. The order's
+     * lines were already updated by Order::ship().
+     */
+    public function ship(Order $order, Shipment $shipment, Actor $actor, \DateTimeImmutable $now): void
     {
-        $this->settle($order, MovementType::Shipment, $actor, $now);
+        $lines = $shipment->lines();
+        $levels = $this->lock(array_map(static fn (ShipmentLine $line): Product => self::product($line->orderLine()), $lines), $shipment->location());
+
+        foreach ($lines as $line) {
+            $level = $levels[self::product($line->orderLine())->id()->toRfc4122()]
+                ?? throw new \LogicException(\sprintf('Order %s ships %s from %s, but there is no inventory level.', $order->number(), $line->orderLine()->skuCode(), $shipment->location()->code()));
+            $change = $level->consume($line->quantity(), $now);
+            $this->record(MovementType::Shipment, $level, $change, $order, $actor, $now);
+        }
     }
 
     private function settle(Order $order, MovementType $type, Actor $actor, \DateTimeImmutable $now): void
@@ -115,9 +129,7 @@ final class OrderStock
         foreach ($held as $line) {
             $level = $levels[self::product($line)->id()->toRfc4122()]
                 ?? throw new \LogicException(\sprintf('Order %s holds stock of %s at %s, but there is no inventory level.', $order->number(), $line->skuCode(), $location->code()));
-            $change = MovementType::Shipment === $type
-                ? $level->consume($line->reservedQuantity(), $now)
-                : $level->release($line->reservedQuantity(), $now);
+            $change = $level->release($line->reservedQuantity(), $now);
             $line->clearReservation();
             $this->record($type, $level, $change, $order, $actor, $now);
         }

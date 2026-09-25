@@ -23,6 +23,7 @@ const addressSchema = z.object({
 export const orderSummarySchema = z.object({
   id: z.string(),
   number: z.string(),
+  externalReference: z.string().nullish(),
   status,
   heldFrom: status.nullish(),
   channel: z.object({ code: z.string(), name: z.string() }),
@@ -51,6 +52,8 @@ export const orderSchema = orderSummarySchema.extend({
       quantity: z.number().int(),
       // Held in stock at the order's location: all of the line from confirm until ship or cancel.
       reservedQuantity: z.number().int().default(0),
+      // Units that have left in shipments; reserved + shipped = quantity while the order holds stock.
+      shippedQuantity: z.number().int().default(0),
       unitPrice: minor,
       lineTotal: minor,
     }),
@@ -67,6 +70,21 @@ export const orderSchema = orderSummarySchema.extend({
     }),
   ),
   availableTransitions: z.array(z.enum(TRANSITIONS)),
+  shipments: z
+    .array(
+      z.object({
+        id: z.string(),
+        location: z.object({ code: z.string(), name: z.string() }),
+        carrier: z.string().nullish(),
+        trackingNumber: z.string().nullish(),
+        shippedAt: z.string(),
+        actor: z.object({ id: z.string(), name: z.string() }),
+        lines: z.array(z.object({ lineId: z.string(), position: z.number().int(), sku: z.string(), name: z.string(), quantity: z.number().int() })),
+      }),
+    )
+    .default([]),
+  // Whether a shipment can be recorded now: confirmed to packed, not on hold, units left.
+  canShip: z.boolean().default(false),
 });
 
 export const orderPageSchema = z.object({
@@ -153,6 +171,26 @@ export function useCreateOrder() {
     onSuccess: (order) => {
       queryClient.setQueryData(['order', order.id], order);
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+/**
+ * Records a shipment: `{ version, lines: [{ lineId, quantity }], carrier, trackingNumber }`.
+ * The API answers with the order, which replaces the one on screen.
+ */
+export function useCreateShipment(id) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (body) => orderSchema.parse(await api(`/api/orders/${encodeURIComponent(id)}/shipments`, { method: 'POST', body })),
+    onSuccess: (order) => {
+      queryClient.setQueryData(['order', id], order);
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    // A conflict means the order on screen is out of date; show the current one.
+    onError: (error) => {
+      if (error?.status === 409) queryClient.invalidateQueries({ queryKey: ['order', id] });
     },
   });
 }

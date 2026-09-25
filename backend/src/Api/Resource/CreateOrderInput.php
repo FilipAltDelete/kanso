@@ -15,6 +15,9 @@ final class CreateOrderInput
     #[ApiProperty(description: 'Channel code; default "manual".', schema: ['type' => 'string'])]
     public mixed $channel = null;
 
+    #[ApiProperty(description: 'The order\'s number in the system it came from, such as a webshop. Unique per channel: a second order with the same reference is refused (422 `taken`), so an order cannot be brought in twice.', schema: ['type' => 'string', 'maxLength' => 64])]
+    public mixed $externalReference = null;
+
     #[ApiProperty(description: 'ISO 4217; default the channel currency.', schema: ['type' => 'string', 'pattern' => '^[A-Z]{3}$'])]
     public mixed $currency = null;
 

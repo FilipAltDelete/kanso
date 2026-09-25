@@ -151,10 +151,10 @@ final class OrderStockTest extends WebTestCase
             self::assertSame([10, 3, 7], $this->stock($tee), $step.' moves no stock');
         }
 
-        $shipped = $this->transition($order, 'ship', $version);
+        $shipped = $this->api('POST', '/api/orders/'.$order['id'].'/shipments', ['version' => $version, 'lines' => [['lineId' => $order['lines'][0]['id'], 'quantity' => 3]]]);
 
         self::assertSame('shipped', $shipped['status']);
-        self::assertSame(0, $shipped['lines'][0]['reservedQuantity']);
+        self::assertSame([0, 3], [$shipped['lines'][0]['reservedQuantity'], $shipped['lines'][0]['shippedQuantity']]);
         self::assertSame([7, 0, 7], $this->stock($tee));
         self::assertSame(-3, $this->api('GET', '/api/inventory-movements?product='.$tee['id'])['member'][0]['onHandChange']);
     }

@@ -17,12 +17,15 @@ use Kanso\Core\Internal\Domain\Inventory\Location;
 use Kanso\Core\Internal\Domain\Inventory\LocationStoreInterface;
 use Kanso\Core\Internal\Domain\Order\Channel;
 use Kanso\Core\Internal\Domain\Order\ChannelStoreInterface;
+use Kanso\Core\Internal\Domain\Order\Money;
 use Kanso\Core\Internal\Domain\Order\NewOrderLine;
 use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderCustomer;
+use Kanso\Core\Internal\Domain\Order\OrderLine;
 use Kanso\Core\Internal\Domain\Order\OrderQuery;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
+use Kanso\Core\Internal\Domain\Order\ShipmentRefused;
 use Kanso\Core\Internal\Domain\Order\Transition;
 use Kanso\Core\Internal\Domain\Order\TransitionNotAllowed;
 use Psr\Clock\ClockInterface;
@@ -58,12 +61,70 @@ final class OrderService
      */
     public function create(array $input, Actor $actor): Order
     {
+        $draft = $this->draft($input);
+
+        $now = $this->clock->now();
+        $order = Order::place(
+            $this->orders->nextNumber(),
+            $draft['channel'],
+            $draft['currency'],
+            $draft['location'],
+            $draft['customer'],
+            $draft['lines'],
+            $draft['placedAt'] ?? $now,
+            $actor,
+            $now,
+            $draft['externalReference'],
+        );
+
+        try {
+            $this->transaction->run(fn () => $this->orders->add($order));
+        } catch (ConcurrentModification $e) {
+            // The unique key on (channel, external reference): created by
+            // someone else between the check in draft() and this write.
+            if (null === $draft['externalReference']) {
+                throw $e;
+            }
+            throw self::referenceTaken($draft['externalReference']);
+        }
+
+        return $order;
+    }
+
+    /**
+     * Everything create() checks, without writing anything or taking an
+     * order number: an import's preview (ADR-0008). Throws the same
+     * ValidationFailed that create() would.
+     *
+     * @param array<string, mixed> $input the create request body
+     */
+    public function check(array $input): void
+    {
+        $this->draft($input);
+    }
+
+    /**
+     * The create input, checked. Every violation is collected before one
+     * ValidationFailed is thrown.
+     *
+     * @param array<string, mixed> $input
+     *
+     * @return array{channel: Channel, externalReference: ?string, currency: string, placedAt: ?\DateTimeImmutable, location: Location, customer: OrderCustomer, lines: list<NewOrderLine>}
+     */
+    private function draft(array $input): array
+    {
         $check = new OrderInput();
 
         $channelCode = $check->text($input['channel'] ?? Channel::MANUAL, 'channel', 64);
         $channel = null === $channelCode ? null : $this->channels->findByCode($channelCode);
         if (null !== $channelCode && null === $channel) {
             $check->violate('channel', \sprintf('No channel "%s".', $channelCode), 'unknown_channel');
+        }
+
+        // The order's number in the system it came from; one order per reference and channel.
+        $reference = $check->text($input['externalReference'] ?? null, 'externalReference', 64, false);
+        if (null !== $reference && null !== $channel && [] !== $this->orders->findByExternalReferences($channel, [$reference])) {
+            $check->violate('externalReference', self::referenceTakenMessage($reference), 'taken');
         }
 
         $currency = $check->currency($input['currency'] ?? $channel?->currency(), 'currency');
@@ -88,30 +149,40 @@ final class OrderService
         $lines = $this->lines($input['lines'] ?? null, $check);
         $location = $this->location($input['location'] ?? null, $check);
 
+        if (null !== $currency) {
+            try {
+                $total = Money::zero($currency);
+                foreach ($lines as $line) {
+                    $total = $total->add(Money::of($line->unitPrice, $currency)->multiply($line->quantity));
+                }
+            } catch (\OverflowException) {
+                // Each line is within range, but the sum of many is not.
+                $check->violate('lines', 'The order total is too large.', 'out_of_range');
+            }
+        }
+
         $check->throwIfInvalid();
         \assert(null !== $channel && null !== $currency && null !== $customerName && null !== $shipping && null !== $location);
 
-        $now = $this->clock->now();
-        try {
-            $order = Order::place(
-                $this->orders->nextNumber(),
-                $channel,
-                $currency,
-                $location,
-                new OrderCustomer($customerId, $customerName, $customerEmail, $shipping, $billing),
-                $lines,
-                $placedAt ?? $now,
-                $actor,
-                $now,
-            );
-        } catch (\OverflowException) {
-            // Each line is within range, but the sum of many is not.
-            throw new ValidationFailed([['path' => 'lines', 'message' => 'The order total is too large.', 'code' => 'out_of_range']]);
-        }
+        return [
+            'channel' => $channel,
+            'externalReference' => $reference,
+            'currency' => $currency,
+            'placedAt' => $placedAt,
+            'location' => $location,
+            'customer' => new OrderCustomer($customerId, $customerName, $customerEmail, $shipping, $billing),
+            'lines' => $lines,
+        ];
+    }
 
-        $this->transaction->run(fn () => $this->orders->add($order));
+    private static function referenceTaken(string $reference): ValidationFailed
+    {
+        return new ValidationFailed([['path' => 'externalReference', 'message' => self::referenceTakenMessage($reference), 'code' => 'taken']]);
+    }
 
-        return $order;
+    private static function referenceTakenMessage(string $reference): string
+    {
+        return \sprintf('This channel already has an order with the reference "%s".', $reference);
     }
 
     /** @return list<NewOrderLine> */
@@ -201,6 +272,12 @@ final class OrderService
         $check->throwIfInvalid();
         \assert(null !== $move && null !== $expected);
 
+        if (Transition::Ship === $move) {
+            // Shipping is shipments: which lines, how many, with which
+            // tracking number. The order moves to shipped when the last goes.
+            throw new Conflict('An order ships through its shipments: POST /api/orders/{id}/shipments.', [['path' => 'transition', 'message' => 'Record a shipment instead.', 'code' => 'use_shipments']]);
+        }
+
         $order = $this->get($id);
         if ($order->version() !== $expected) {
             throw $this->stale($order);
@@ -239,11 +316,125 @@ final class OrderService
 
         if (!$heldStock && $order->holdsStock()) {
             $this->stock->reserve($order, $actor, $now);
-        } elseif ($heldStock && Transition::Ship === $move) {
-            $this->stock->ship($order, $actor, $now);
         } elseif ($heldStock && !$order->holdsStock()) {
             $this->stock->release($order, $actor, $now);
         }
+    }
+
+    /**
+     * Records a shipment: some lines, or part of a line. Its units come off
+     * on hand and off the reservation, the lines count them as shipped, and
+     * the order moves to shipped when nothing is left — all in one
+     * transaction, checked against the order version the caller saw.
+     *
+     * @param array<string, mixed> $input the request body
+     */
+    public function ship(string $id, array $input, Actor $actor): Order
+    {
+        $check = new OrderInput();
+        $expected = $check->integer($input['version'] ?? null, 'version', 1, \PHP_INT_MAX);
+        $carrier = $check->text($input['carrier'] ?? null, 'carrier', 64, false);
+        $tracking = $check->text($input['trackingNumber'] ?? null, 'trackingNumber', 128, false);
+        $shippedAt = $check->instant($input['shippedAt'] ?? null, 'shippedAt');
+        $check->throwIfInvalid();
+        \assert(null !== $expected);
+
+        $order = $this->get($id);
+        $lines = $this->shipmentLines($input['lines'] ?? null, $order, $check);
+        $check->throwIfInvalid();
+
+        if ($order->version() !== $expected) {
+            throw $this->stale($order);
+        }
+
+        // Only reached with no violations, so at least one line.
+        \assert([] !== $lines);
+
+        $now = $this->clock->now();
+        try {
+            $this->transaction->run(function () use ($order, $lines, $carrier, $tracking, $shippedAt, $actor, $now): void {
+                try {
+                    $shipment = $order->ship($lines, $carrier, $tracking, $shippedAt ?? $now, $actor, $now);
+                } catch (ShipmentRefused $e) {
+                    throw ShipmentRefused::NOT_SHIPPABLE === $e->reason
+                        ? new Conflict($e->getMessage(), [['path' => 'lines', 'message' => $e->getMessage(), 'code' => $e->reason]])
+                        : new ValidationFailed([['path' => self::linePath($lines, $e->linePosition), 'message' => $e->getMessage(), 'code' => $e->reason]]);
+                }
+                $this->stock->ship($order, $shipment, $actor, $now);
+            });
+        } catch (ConcurrentModification) {
+            throw $this->stale($order);
+        }
+
+        return $order;
+    }
+
+    /**
+     * `[{lineId, quantity}]`, each line of this order at most once.
+     *
+     * @return list<array{line: OrderLine, quantity: int}>
+     */
+    private function shipmentLines(mixed $value, Order $order, OrderInput $check): array
+    {
+        if (!\is_array($value) || [] === $value || !array_is_list($value)) {
+            $check->violate('lines', 'A shipment needs at least one line.', 'required');
+
+            return [];
+        }
+
+        $byId = [];
+        foreach ($order->lines() as $line) {
+            $byId[(string) $line->id()] = $line;
+        }
+
+        $lines = [];
+        $seen = [];
+        foreach ($value as $index => $entry) {
+            $path = \sprintf('lines[%d]', $index);
+            if (!\is_array($entry)) {
+                $check->violate($path, 'A line must be an object.', 'type');
+                continue;
+            }
+            $lineId = $check->uuid($entry['lineId'] ?? null, $path.'.lineId');
+            $quantity = $check->integer($entry['quantity'] ?? null, $path.'.quantity', 1, self::MAX_QUANTITY);
+            if (null === $lineId) {
+                if (!isset($entry['lineId'])) {
+                    $check->violate($path.'.lineId', 'This value is required.', 'required');
+                }
+                continue;
+            }
+            $line = $byId[$lineId] ?? null;
+            if (null === $line) {
+                $check->violate($path.'.lineId', \sprintf('Order %s has no line "%s".', $order->number(), $lineId), 'unknown_line');
+                continue;
+            }
+            if (isset($seen[$lineId])) {
+                $check->violate($path.'.lineId', 'Each line once per shipment.', 'duplicate_line');
+                continue;
+            }
+            $seen[$lineId] = true;
+            if (null !== $quantity && $quantity > $line->remainingQuantity()) {
+                $check->violate($path.'.quantity', \sprintf('Line %d (%s) has %d left to ship.', $line->position(), $line->skuCode(), $line->remainingQuantity()), ShipmentRefused::EXCEEDS_REMAINING);
+                continue;
+            }
+            if (null !== $quantity) {
+                $lines[] = ['line' => $line, 'quantity' => $quantity];
+            }
+        }
+
+        return $lines;
+    }
+
+    /** @param list<array{line: OrderLine, quantity: int}> $lines */
+    private static function linePath(array $lines, ?int $position): string
+    {
+        foreach ($lines as $index => $entry) {
+            if ($entry['line']->position() === $position) {
+                return \sprintf('lines[%d].quantity', $index);
+            }
+        }
+
+        return 'lines';
     }
 
     private function stale(Order $order): Conflict

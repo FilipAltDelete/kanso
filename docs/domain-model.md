@@ -31,7 +31,7 @@ erDiagram
 | InventoryLevel | Stock of one SKU at one location | on_hand, reserved (available = on_hand − reserved; 0 ≤ reserved ≤ on_hand), version |
 | InventoryMovement | Append-only history of every level change | product, location, type, reason, note, on_hand/reserved before and after, actor, occurred_at |
 | Reservation | Stock held for an order line — in code, `order_line.reserved_quantity` at the order's `location` (one location per order in Phase 1; ADR-0005) | order_line, location, quantity |
-| Shipment | A parcel leaving a location | order, lines, carrier, tracking_number, shipped_at |
+| Shipment | A parcel leaving the order's location: some lines, or part of a line (ADR-0009) | order, location, lines (order_line, quantity), carrier, tracking_number (typed in; both optional), shipped_at, actor; `order_line.shipped_quantity` counts what has left |
 | OrderEvent | Audit trail: creation and every state change | order, type (`created`, `transition`), transition, actor + actor name, before/after, occurred_at |
 | Document | A generated PDF for an order (pick list, packing slip) and the job that makes it | type, order, order_version, locale, status (queued/running/done/failed), storage_key, requested_by |
 | Return | Phase 3 | — |

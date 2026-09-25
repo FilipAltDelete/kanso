@@ -26,5 +26,5 @@ Every order moves through `pending → confirmed → allocated → picking → p
 
 - A new status or transition is a change to one table, and `OrderStateMachineTest` checks every status against every transition, so an unplaced one fails.
 - Clients (the UI, integrations) must send the version they read. A stale screen gets a conflict to reload, never a silent overwrite.
-- Stock follows the status in the same transaction: reserved on `confirm`, released on `cancel`, taken off on hand on `ship`. See ADR-0005.
+- Stock follows the status in the same transaction: reserved on `confirm`, released on `cancel` (ADR-0005). It leaves on hand shipment by shipment, and `ship` is no longer a transition a person asks for: the last shipment applies it (ADR-0009).
 - Order numbers can have gaps. Channels that bring their own numbers (Shopify and others) will need an external-reference field beside `number`.

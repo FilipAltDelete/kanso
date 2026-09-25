@@ -58,6 +58,10 @@ class OrderLine
     #[ORM\Column(name: 'reserved_quantity', options: ['default' => 0])]
     private int $reservedQuantity = 0;
 
+    /** Units that have left in shipments. reserved + shipped = quantity while the order holds stock. */
+    #[ORM\Column(name: 'shipped_quantity', options: ['default' => 0])]
+    private int $shippedQuantity = 0;
+
     public function __construct(Order $order, int $position, NewOrderLine $line)
     {
         if ($line->quantity < 1) {
@@ -107,10 +111,37 @@ class OrderLine
         $this->reservedQuantity = $this->quantity;
     }
 
-    /** What was held is no longer: released, or shipped. */
+    /** What was held is no longer: released when the order is cancelled. */
     public function clearReservation(): void
     {
         $this->reservedQuantity = 0;
+    }
+
+    public function shippedQuantity(): int
+    {
+        return $this->shippedQuantity;
+    }
+
+    /** Units still to ship. */
+    public function remainingQuantity(): int
+    {
+        return $this->quantity - $this->shippedQuantity;
+    }
+
+    /**
+     * Units left in a shipment: they stop being reserved and count as shipped,
+     * so reserved + shipped stays equal to the quantity.
+     */
+    public function markShipped(int $units): void
+    {
+        if ($units < 1 || $units > $this->remainingQuantity()) {
+            throw new \LogicException(\sprintf('Line %d cannot ship %d; %d left.', $this->position, $units, $this->remainingQuantity()));
+        }
+        if ($units > $this->reservedQuantity) {
+            throw new \LogicException(\sprintf('Line %d holds %d reserved; cannot ship %d.', $this->position, $this->reservedQuantity, $units));
+        }
+        $this->reservedQuantity -= $units;
+        $this->shippedQuantity += $units;
     }
 
     public function skuCode(): string

@@ -201,10 +201,10 @@ final class OrderApiTest extends WebTestCase
     {
         $order = $this->create();
 
-        $this->transition($order['id'], 'ship', 1);
+        $this->transition($order['id'], 'deliver', 1);
 
         self::assertResponseStatusCodeSame(409);
-        self::assertSame('An order that is pending cannot ship.', $this->json()['detail']);
+        self::assertSame('An order that is pending cannot deliver.', $this->json()['detail']);
         self::assertSame('transition_not_allowed', $this->json()['violations'][0]['code']);
         self::assertSame(1, $this->eventCount($order['number']));
         self::assertSame('pending', $this->connection()->fetchOne('SELECT status FROM sales_order WHERE number = ?', [$order['number']]));

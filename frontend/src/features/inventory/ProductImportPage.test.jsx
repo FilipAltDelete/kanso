@@ -76,7 +76,7 @@ describe('the product import page', () => {
 
     await chooseFile('sku;name;weight\nA;One;1\n', 'Välj fil');
 
-    expect(await screen.findByText('Okänd kolumn "weight". Kolumnerna är sku, name, barcode och weightGrams.')).toBeTruthy();
+    expect(await screen.findByText('Okänd kolumn "weight". Kolumnerna finns i listan ovan.')).toBeTruthy();
   });
 
   it('does not send a file over the size limit', async () => {

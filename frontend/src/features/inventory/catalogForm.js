@@ -1,4 +1,7 @@
+import { firstTranslation } from '../../lib/translate.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
+
+export { firstTranslation };
 
 const CAN_EDIT = ['ROLE_ADMIN', 'ROLE_OPERATOR'];
 
@@ -7,19 +10,6 @@ export function useCanEditCatalog() {
   const { user } = useAuth();
 
   return user?.roles?.some((role) => CAN_EDIT.includes(role)) ?? false;
-}
-
-/**
- * The first translation that exists among `keys`, else `fallback`. t()
- * returns the key itself when there is no message for it.
- */
-export function firstTranslation(t, keys, fallback, values) {
-  for (const key of keys) {
-    const message = t(key, values);
-    if (message !== key) return message;
-  }
-
-  return fallback;
 }
 
 /**

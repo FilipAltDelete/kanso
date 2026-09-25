@@ -20,9 +20,10 @@ final class OrderStateMachineTest extends TestCase
     /** from => [transition => to]; release is covered separately, since its target depends on heldFrom. */
     private const array ALLOWED = [
         'pending' => ['confirm' => 'confirmed', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
-        'confirmed' => ['allocate' => 'allocated', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
-        'allocated' => ['start_picking' => 'picking', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
-        'picking' => ['pack' => 'packed', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
+        // `ship` from any stock-holding status: the last shipment applies it.
+        'confirmed' => ['allocate' => 'allocated', 'ship' => 'shipped', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
+        'allocated' => ['start_picking' => 'picking', 'ship' => 'shipped', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
+        'picking' => ['pack' => 'packed', 'ship' => 'shipped', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
         'packed' => ['ship' => 'shipped', 'cancel' => 'cancelled', 'hold' => 'on_hold'],
         'shipped' => ['deliver' => 'delivered'],
         'delivered' => [],

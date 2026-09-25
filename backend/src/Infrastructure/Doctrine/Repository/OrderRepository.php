@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use Kanso\Core\Internal\Domain\Common\Page;
+use Kanso\Core\Internal\Domain\Order\Channel;
 use Kanso\Core\Internal\Domain\Order\Order;
 use Kanso\Core\Internal\Domain\Order\OrderQuery;
 use Kanso\Core\Internal\Domain\Order\OrderStatus;
@@ -81,9 +82,26 @@ final class OrderRepository implements OrderStoreInterface
             // Contains, so a surname finds "Anna Andersson". A scan, but a
             // cheap one at Phase 1 volumes; a search engine is a Phase 4 option.
             $like = '%'.Like::escape($query->search).'%';
-            $builder->andWhere('o.number LIKE :search OR o.customerName LIKE :search OR o.customerEmail LIKE :search')
+            $builder->andWhere('o.number LIKE :search OR o.externalReference LIKE :search OR o.customerName LIKE :search OR o.customerEmail LIKE :search')
                 ->setParameter('search', $like);
         }
+    }
+
+    public function findByExternalReferences(Channel $channel, array $references): array
+    {
+        $found = [];
+        // In slices, so a large import stays well inside max_allowed_packet.
+        foreach (array_chunk(array_values(array_unique($references)), 1000) as $slice) {
+            /** @var list<Order> $orders */
+            $orders = $this->em->createQueryBuilder()->select('o')->from(Order::class, 'o')->join('o.channel', 'c')
+                ->where('c.code = :channel AND o.externalReference IN (:references)')
+                ->setParameter('channel', $channel->code())
+                ->setParameter('references', $slice)
+                ->getQuery()->getResult();
+            array_push($found, ...$orders);
+        }
+
+        return $found;
     }
 
     public function nextNumber(): string

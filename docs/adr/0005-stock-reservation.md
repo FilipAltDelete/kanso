@@ -15,7 +15,7 @@ Overselling is the risk the roadmap names first. An order's stock has to be held
 - **Stock follows the status, in `OrderService::transition()`'s transaction** (`Application\Order\OrderStock`):
   - `confirm` reserves every line, all or nothing. If any product is short, nothing is reserved, and the answer is a **409 naming every short line** (`insufficient_stock`, path `lines[i].quantity`).
   - `cancel` of an order that holds stock releases it.
-  - `ship` takes the reserved stock off on hand (on hand and reserved both drop).
+  - Shipping takes the reserved stock off on hand (on hand and reserved both drop), shipment by shipment (superseded in detail by ADR-0009).
   - `hold` and `release` move no stock. An order on hold from a confirmed status keeps what it holds.
   - Each change writes an inventory movement (`reservation`, `release`, `shipment`) carrying the order's id and number.
 - **Row locks, not only optimistic locking.** Inside the transaction the levels involved are read with `SELECT … FOR UPDATE`, in product-id order. A second confirmation for the same product waits for the first to commit, then sees what it reserved.
@@ -27,5 +27,5 @@ Overselling is the risk the roadmap names first. An order's stock has to be held
 - Concurrent confirmations get the right answer rather than a spurious conflict. `ConcurrentConfirmationTest` confirms eight orders in eight processes at once. With the lock removed, seven of them failed with a stale-version conflict even when there was stock for all eight.
 - A confirmation holds row locks on its products' levels for the length of its transaction (milliseconds). Deadlocks and lock-wait timeouts are mapped to a 409, like a lost optimistic lock.
 - The default location is an environment variable, so changing it is a redeploy. That is acceptable while installations have one or two locations. If operators need to change it themselves, it becomes a settings row or a flag on Location.
-- Orders placed before this change may have lines with no product (backfilled by SKU where the catalogue had it). Confirming one of those is a 422 (`no_product`). Such orders that were already confirmed hold nothing, so cancelling or shipping them moves no stock.
+- Orders placed before this change may have lines with no product (backfilled by SKU where the catalogue had it). Confirming one of those is a 422 (`no_product`). Such orders that were already confirmed hold nothing: cancelling one moves no stock, and a shipment of one is refused (`not_reserved`, ADR-0009).
 - When routing across locations arrives (Phase 3), a line can be reserved at several locations. `reserved_quantity` then becomes a Reservation table (line, location, quantity), as the domain model draft has it.

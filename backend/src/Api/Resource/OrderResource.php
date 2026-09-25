@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\QueryParameter;
 use Kanso\Core\Internal\Api\State\CreateOrderProcessor;
+use Kanso\Core\Internal\Api\State\CreateShipmentProcessor;
 use Kanso\Core\Internal\Api\State\OrderProvider;
 use Kanso\Core\Internal\Api\State\TransitionOrderProcessor;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -32,7 +33,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
                 'channel' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated channel codes.'),
                 'placedFrom' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed at or after this instant (ISO 8601 with offset, or a date meaning UTC midnight).'),
                 'placedBefore' => new QueryParameter(schema: ['type' => 'string', 'format' => 'date-time'], description: 'Placed before this instant.'),
-                'q' => new QueryParameter(schema: ['type' => 'string'], description: 'Search the order number, customer name and customer email.'),
+                'q' => new QueryParameter(schema: ['type' => 'string'], description: 'Search the order number, external reference, customer name and customer email.'),
                 'customer' => new QueryParameter(schema: ['type' => 'string', 'format' => 'uuid'], description: 'Only orders linked to this customer record.'),
                 'sort' => new QueryParameter(schema: ['type' => 'string'], description: 'Comma-separated fields, "-" for descending: placedAt, number, total, customerName, status. Default -placedAt.'),
             ],
@@ -50,6 +51,16 @@ use Symfony\Component\Serializer\Attribute\Groups;
             processor: CreateOrderProcessor::class,
             normalizationContext: ['groups' => ['order:list', 'order:detail']],
             description: 'Create an order manually. It starts as pending.',
+        ),
+        new Post(
+            uriTemplate: '/orders/{id}/shipments',
+            status: 201,
+            security: "is_granted('ROLE_OPERATOR')",
+            input: ShipmentInput::class,
+            read: false,
+            processor: CreateShipmentProcessor::class,
+            normalizationContext: ['groups' => ['order:list', 'order:detail']],
+            description: 'Ship some or all of what is left: lines and quantities (part of a line is fine), carrier and tracking number. The units come off stock on hand and off the reservation; the order becomes shipped when nothing is left. Send the version you last saw: 409 if the order changed since, or if it is not in a status that ships. Answers with the order.',
         ),
         new Post(
             uriTemplate: '/orders/{id}/transitions',
@@ -72,6 +83,10 @@ final class OrderResource
 
     #[Groups(['order:list'])]
     public string $number = '';
+
+    /** The order's number in the system it came from; unique per channel. Null for orders entered by hand. */
+    #[Groups(['order:list'])]
+    public ?string $externalReference = null;
 
     #[Groups(['order:list'])]
     public string $status = '';
@@ -142,8 +157,17 @@ final class OrderResource
     #[Groups(['order:detail'])]
     public array $events = [];
 
-    /** @var list<string> */
+    /** @var list<string> `ship` is never listed: an order ships through shipments. */
     #[ApiProperty(schema: ['type' => 'array', 'items' => ['type' => 'string']])]
     #[Groups(['order:detail'])]
     public array $availableTransitions = [];
+
+    /** @var list<array<string, mixed>> oldest first */
+    #[ApiProperty(schema: ['type' => 'array', 'items' => Schemas::SHIPMENT])]
+    #[Groups(['order:detail'])]
+    public array $shipments = [];
+
+    /** Whether a shipment can be recorded now: confirmed to packed, not on hold, units left. */
+    #[Groups(['order:detail'])]
+    public bool $canShip = false;
 }

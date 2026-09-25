@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
+import { FileUp, Plus } from 'lucide-react';
 import { ORDER_STATUSES, useChannels, useOrders } from '../../api/orders.js';
 import { ErrorNotice } from '../../components/ui/primitives.jsx';
 import { DataTable, useUrlView } from '../../components/ui/table/index.js';
@@ -79,13 +79,22 @@ export function OrderListPage() {
           <p className="text-sm text-slate-500">{t('orders.subtitle')}</p>
         </div>
         {canOperate ? (
-          <Link
-            to="/orders/new"
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-accent-fg hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {t('orders.new')}
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              to="/orders/import"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            >
+              <FileUp className="size-4" aria-hidden="true" />
+              {t('orderImport.open')}
+            </Link>
+            <Link
+              to="/orders/new"
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-accent-fg hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {t('orders.new')}
+            </Link>
+          </div>
         ) : null}
       </div>
 

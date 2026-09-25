@@ -205,10 +205,6 @@ export function useUpdateLocation(id) {
   });
 }
 
-/** The server's limits for one product CSV (ProductImporter); checked here first so a too-large file is never sent. */
-export const IMPORT_MAX_BYTES = 1024 * 1024;
-export const IMPORT_MAX_ROWS = 5000;
-
 export const importResultSchema = z.object({
   dryRun: z.boolean(),
   rows: z.number().int(),

@@ -23,7 +23,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'sales_order')]
 class Order
 {
-    /** The statuses in which the order's stock is reserved. */
+    /** The statuses in which the order's stock is reserved, and in which it can ship. */
     private const array HOLDING_STOCK = [OrderStatus::Confirmed, OrderStatus::Allocated, OrderStatus::Picking, OrderStatus::Packed];
 
     #[ORM\Id]
@@ -32,6 +32,14 @@ class Order
 
     #[ORM\Column(length: 32, unique: true)]
     private string $number;
+
+    /**
+     * The order's reference in the system it came from (a webshop's order
+     * number, a CSV file's orderReference), unique per channel so the same
+     * order cannot be brought in twice. Null for orders entered by hand.
+     */
+    #[ORM\Column(name: 'external_reference', length: 64, nullable: true)]
+    private ?string $externalReference = null;
 
     #[ORM\ManyToOne(targetEntity: Channel::class)]
     #[ORM\JoinColumn(name: 'channel_id', nullable: false)]
@@ -94,6 +102,11 @@ class Order
     #[ORM\OrderBy(['position' => 'ASC'])]
     private Collection $lines;
 
+    /** @var Collection<int, Shipment> */
+    #[ORM\OneToMany(targetEntity: Shipment::class, mappedBy: 'order', cascade: ['persist'])]
+    #[ORM\OrderBy(['id' => 'ASC'])]
+    private Collection $shipments;
+
     /** @var Collection<int, OrderEvent> */
     #[ORM\OneToMany(targetEntity: OrderEvent::class, mappedBy: 'order', cascade: ['persist'], fetch: 'EXTRA_LAZY')]
     #[ORM\OrderBy(['id' => 'ASC'])]
@@ -122,6 +135,7 @@ class Order
         $this->updatedAt = $now;
         $this->lines = new ArrayCollection();
         $this->events = new ArrayCollection();
+        $this->shipments = new ArrayCollection();
 
         $total = Money::zero($this->currency);
         foreach ($lines as $index => $line) {
@@ -143,8 +157,10 @@ class Order
         \DateTimeImmutable $placedAt,
         Actor $actor,
         \DateTimeImmutable $now,
+        ?string $externalReference = null,
     ): self {
         $order = new self($number, $channel, $currency, $location, $customer, $lines, $placedAt, $now);
+        $order->externalReference = $externalReference;
         $order->events->add(new OrderEvent($order, OrderEvent::CREATED, null, $actor, null, $order->snapshot(), $now));
 
         return $order;
@@ -154,7 +170,9 @@ class Order
     public function apply(Transition $transition, Actor $actor, \DateTimeImmutable $now): OrderEvent
     {
         $target = OrderStateMachine::target($this->status, $transition, $this->heldFrom);
-        if (null === $target) {
+        // Part of it has left the building: cancelling the rest is a partial
+        // cancel, which is its own feature (ROADMAP Phase 1), not this.
+        if (null === $target || (Transition::Cancel === $transition && $this->hasShipped())) {
             throw new TransitionNotAllowed($this->status, $transition);
         }
 
@@ -190,10 +208,99 @@ class Order
         $this->location = $location;
     }
 
-    /** @return list<Transition> */
+    /**
+     * Records a shipment of some or all of what is left to ship. The lines'
+     * shipped quantities go up and their reservations down (the stock itself
+     * is OrderStock's, in the same transaction); an event records it; and when
+     * nothing is left to ship, the order moves to shipped through the state
+     * machine.
+     *
+     * @param non-empty-list<array{line: OrderLine, quantity: int}> $lines lines of this order
+     *
+     * @throws ShipmentRefused
+     */
+    public function ship(array $lines, ?string $carrier, ?string $trackingNumber, \DateTimeImmutable $shippedAt, Actor $actor, \DateTimeImmutable $now): Shipment
+    {
+        if (!$this->canShip()) {
+            throw new ShipmentRefused(\sprintf('Order %s cannot ship while it is %s.', $this->number, $this->status->value), ShipmentRefused::NOT_SHIPPABLE);
+        }
+        if ([] === $lines) {
+            throw new ShipmentRefused('A shipment needs at least one unit.', ShipmentRefused::EMPTY);
+        }
+
+        $shipping = [];
+        foreach ($lines as $entry) {
+            $line = $entry['line'];
+            if (!$this->lines->contains($line)) {
+                throw new \InvalidArgumentException(\sprintf('Line %d is not a line of order %s.', $line->position(), $this->number));
+            }
+            $shipping[$line->position()] = ($shipping[$line->position()] ?? 0) + $entry['quantity'];
+            if ($entry['quantity'] < 1 || $shipping[$line->position()] > $line->remainingQuantity()) {
+                throw new ShipmentRefused(\sprintf('Line %d (%s) has %d left to ship.', $line->position(), $line->skuCode(), $line->remainingQuantity()), ShipmentRefused::EXCEEDS_REMAINING, $line->position());
+            }
+            if ($shipping[$line->position()] > $line->reservedQuantity()) {
+                throw new ShipmentRefused(\sprintf('Line %d (%s) has no stock reserved to ship; it was confirmed before reservations existed.', $line->position(), $line->skuCode()), ShipmentRefused::NOT_RESERVED, $line->position());
+            }
+        }
+
+        $location = $this->location ?? throw new \LogicException(\sprintf('Order %s has no location.', $this->number));
+        $shipment = new Shipment($this, $location, $lines, $carrier, $trackingNumber, $shippedAt, $actor, $now);
+        foreach ($lines as $entry) {
+            $entry['line']->markShipped($entry['quantity']);
+        }
+        $this->shipments->add($shipment);
+        $this->updatedAt = $now;
+
+        $this->events->add(new OrderEvent($this, OrderEvent::SHIPMENT, null, $actor, null, [
+            'shipment' => (string) $shipment->id(),
+            'carrier' => $carrier,
+            'trackingNumber' => $trackingNumber,
+            'lines' => array_map(static fn (ShipmentLine $line): array => ['position' => $line->orderLine()->position(), 'sku' => $line->orderLine()->skuCode(), 'quantity' => $line->quantity()], $shipment->lines()),
+        ], $now));
+
+        if (0 === $this->remainingUnits()) {
+            $this->apply(Transition::Ship, $actor, $now);
+        }
+
+        return $shipment;
+    }
+
+    /** Whether a shipment can be recorded now: the order holds stock, is not on hold, and has units left. */
+    public function canShip(): bool
+    {
+        return \in_array($this->status, self::HOLDING_STOCK, true) && $this->remainingUnits() > 0;
+    }
+
+    /** Whether any of the order has left in a shipment. */
+    public function hasShipped(): bool
+    {
+        return !$this->shipments->isEmpty();
+    }
+
+    private function remainingUnits(): int
+    {
+        return array_sum(array_map(static fn (OrderLine $line): int => $line->remainingQuantity(), $this->lines()));
+    }
+
+    /**
+     * The transitions a person can ask for now. `ship` is not one of them:
+     * an order ships through shipments, and moves to shipped by itself when
+     * the last one goes.
+     *
+     * @return list<Transition>
+     */
     public function availableTransitions(): array
     {
-        return OrderStateMachine::available($this->status, $this->heldFrom);
+        return array_values(array_filter(
+            OrderStateMachine::available($this->status, $this->heldFrom),
+            fn (Transition $transition): bool => Transition::Ship !== $transition && !(Transition::Cancel === $transition && $this->hasShipped()),
+        ));
+    }
+
+    /** @return list<Shipment> oldest first */
+    public function shipments(): array
+    {
+        return array_values($this->shipments->toArray());
     }
 
     /** @return array{status: string, heldFrom: string|null} */
@@ -208,6 +315,7 @@ class Order
         return [
             ...$this->statusState(),
             'channel' => $this->channel->code(),
+            ...(null === $this->externalReference ? [] : ['externalReference' => $this->externalReference]),
             'currency' => $this->currency,
             'total' => $this->totalAmount,
             'lines' => $this->lines->count(),
@@ -217,6 +325,11 @@ class Order
     public function id(): Uuid
     {
         return $this->id;
+    }
+
+    public function externalReference(): ?string
+    {
+        return $this->externalReference;
     }
 
     public function number(): string

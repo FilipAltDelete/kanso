@@ -14,6 +14,16 @@ interface OrderStoreInterface
     public function search(OrderQuery $query): Page;
 
     /**
+     * The orders a channel already has under these external references. The
+     * column compares without regard to case or accents, like the SKU.
+     *
+     * @param list<string> $references
+     *
+     * @return list<Order>
+     */
+    public function findByExternalReferences(Channel $channel, array $references): array;
+
+    /**
      * The next order number. Taken outside the order's transaction, so a
      * failed create leaves a gap in the numbering rather than holding a lock.
      */
