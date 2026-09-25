@@ -30,8 +30,14 @@ services:
             - '../src/Domain/User/Role.php'
             - '../src/Domain/Security/IssuedTokens.php'
             - '../src/Domain/Security/ApiKey.php'
+            # Entities and values; the store interfaces are aliased below.
+            - '../src/Domain/Order/'
             - '../src/Infrastructure/Security/ApiKeyRateLimited.php'
             - '../src/Application/Exception/'
+            # Entities and values, not services.
+            - '../src/Domain/Common/{Actor,Page,PageRequest,ConcurrentModification}.php'
+            - '../src/Domain/Catalog/Product.php'
+            - '../src/Domain/Inventory/{Address,Location,InventoryLevel,InventoryMovement,StockChange,StockRuleViolated,AdjustmentReason,MovementType}.php'
             - '../src/Api/Resource/'
 
     Kanso\Core\Internal\Api\Controller\:
@@ -45,6 +51,12 @@ services:
     Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface: '@Kanso\Core\Internal\Infrastructure\Security\LexikAccessTokenIssuer'
     Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface: '@Kanso\Core\Internal\Infrastructure\Security\RedisRefreshTokenStore'
     Kanso\Core\Internal\Domain\Security\ApiKeyStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ApiKeyRepository'
+    Kanso\Core\Internal\Domain\Order\OrderStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\OrderRepository'
+    Kanso\Core\Internal\Domain\Order\ChannelStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ChannelRepository'
+    Kanso\Core\Internal\Domain\Common\TransactionInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\DoctrineTransaction'
+    Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ProductRepository'
+    Kanso\Core\Internal\Domain\Inventory\LocationStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\LocationRepository'
+    Kanso\Core\Internal\Domain\Inventory\InventoryStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\InventoryRepository'
     Kanso\Core\Internal\Domain\Health\HealthCheckInterface: '@Kanso\Core\Internal\Infrastructure\Health\HealthChecker'
     Kanso\Core\Internal\Domain\Observability\MetricsInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
     Kanso\Core\Internal\Domain\Observability\MetricsExporterInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'

@@ -63,6 +63,16 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 
 **Exit criteria:** a pilot merchant runs their daily operations in Kanso.
 
+**Status (2026-09-25):**
+- [x] Products (SKU, name, barcode, weight in grams) and locations (code, name, address): REST API with search, sort and paging; product and location lists in the UI
+- [x] Stock per product and location (`available = on hand − reserved`, never negative), with an append-only movement history (who, what, when, before/after)
+- [x] Manual stock adjustments with reason codes: add/remove or set a counted quantity, one transaction each, optimistic locking (`expectedVersion`, 409 when stale); adjust-stock dialog on the product page
+- [ ] Creating and editing products and locations in the UI (API only for now); CSV import of products
+- [x] Orders: channels (`manual` seeded), orders with lines copied on (SKU code, name, quantity, unit price in minor units) and the customer copied on; state machine with hold/release; an order event per change in the same transaction; optimistic locking (`version`, 409 when stale)
+- [x] Order REST API: create, list (status, channel, date range, search, sort, paging), detail with timeline, `POST /orders/{id}/transitions`
+- [x] Order UI: list with filters and saved view in the URL, detail with lines, addresses, actions and history, create-order form
+- [ ] Stock reservation on confirm (needs order lines linked to products); CSV order import; editing orders, partial cancel, notes and tags; payment status
+
 ---
 
 ## Phase 2: Integrations and automation (months 3–6)

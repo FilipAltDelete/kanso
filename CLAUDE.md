@@ -4,7 +4,7 @@ A **web-based Order Management System** for e-commerce and retail merchants. It 
 
 Kanso uses **the same tech stack and deployment model as Pimsen** (`../pimsen`). When a stack or infrastructure question comes up, follow Pimsen's choices and ADRs (`../pimsen/docs/06-decisions.md`, `../pimsen/docs/tech-stack/`) unless a Kanso ADR says otherwise.
 
-- Roadmap: `ROADMAP.md` — **current phase: Phase 0 (Foundations), scaffold done** (status in the Phase 0 section there)
+- Roadmap: `ROADMAP.md` — **current phase: Phase 1 (MVP, core order flow)**; Phase 0 is done except the deploy-target decision (status in each phase's section there)
 - Decisions: `docs/adr/` · Domain model draft: `docs/domain-model.md` · Setup: `README.md`
 - Spec: `docs/OMS-SPEC.md` (not yet generated — see `docs/prompts/oms-spec-prompt.md`)
 

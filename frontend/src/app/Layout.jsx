@@ -1,15 +1,19 @@
 import { Link, Outlet } from '@tanstack/react-router';
-import { Boxes, LayoutDashboard, LogOut, Package, Settings, ShoppingCart, Users } from 'lucide-react';
+import { LayoutDashboard, LogOut, Package, Settings, ShoppingCart, Users, Warehouse } from 'lucide-react';
 import { Badge, Button } from '../components/ui/primitives.jsx';
 import { useAuth } from '../features/auth/AuthProvider.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import { LanguageSelect } from './LanguageSelect.jsx';
 
+/** Modules that exist. */
+const live = [
+  { to: '/orders', key: 'nav.orders', icon: ShoppingCart },
+  { to: '/products', key: 'nav.products', icon: Package },
+  { to: '/locations', key: 'nav.locations', icon: Warehouse },
+];
+
 /** Modules on the roadmap, shown so the shape of the app is visible; they become links as they land. */
 const upcoming = [
-  { key: 'nav.orders', icon: ShoppingCart },
-  { key: 'nav.inventory', icon: Boxes },
-  { key: 'nav.products', icon: Package },
   { key: 'nav.customers', icon: Users },
 ];
 
@@ -31,6 +35,17 @@ export function Layout() {
             <LayoutDashboard className="size-4" aria-hidden="true" />
             {t('nav.dashboard')}
           </Link>
+          {live.map(({ to, key, icon: Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              className="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+              activeProps={{ className: 'bg-slate-100 font-medium text-slate-900' }}
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              {t(key)}
+            </Link>
+          ))}
           {upcoming.map(({ key, icon: Icon }) => (
             <span
               key={key}

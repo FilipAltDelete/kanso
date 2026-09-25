@@ -10,7 +10,8 @@ export function TablePagination({ table, total, pageSizes }) {
   const { pageIndex, pageSize } = table.getState().pagination;
   const pages = Math.max(1, table.getPageCount());
   const from = total === 0 ? 0 : pageIndex * pageSize + 1;
-  const to = Math.min(total, (pageIndex + 1) * pageSize);
+  // The rows actually on the page: with server paging, the last page is often short.
+  const to = total === 0 ? 0 : Math.min(total, from + table.getRowModel().rows.length - 1);
 
   const pageButtons = [
     { label: t('table.firstPage'), icon: ChevronsLeft, onClick: () => table.firstPage(), disabled: !table.getCanPreviousPage() },

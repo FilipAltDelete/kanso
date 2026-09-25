@@ -1,6 +1,6 @@
 # Domain model (draft)
 
-Phase 0 deliverable: the entities Phase 1 builds. Only `User` exists in code today. Names and fields will change as Phase 1 lands; update this file when they do.
+Phase 0 deliverable: the entities Phase 1 builds. In code so far: `User`, `Product`, `Location`, `InventoryLevel` and `InventoryMovement` (catalog and inventory), and `Channel`, `Order`, `OrderLine` and `OrderEvent` (orders); the rest is a draft. Names and fields will change as Phase 1 lands; update this file when they do.
 
 ```mermaid
 erDiagram
@@ -20,16 +20,17 @@ erDiagram
 | Entity | Purpose | Key fields |
 |---|---|---|
 | User | Signs in to the web UI | email, name, roles, enabled |
-| Channel | Where an order came from (manual, CSV, Shopify…) | code, type, currency |
+| Channel | Where an order came from (manual, CSV, Shopify…) | code, name, type, currency (default for new orders); `manual` is seeded |
 | Customer | Buyer | email, name, addresses |
-| Order | The core object | number, channel, customer, status, currency, totals (minor units), placed_at, version |
-| OrderLine | One SKU on an order | sku, quantity, unit_price (minor units), quantity_shipped |
-| Product (SKU) | What is sold and stocked | sku, name, barcode, weight |
-| Location | Warehouse or store | code, name, address |
-| InventoryLevel | Stock of one SKU at one location | on_hand, reserved (available = on_hand − reserved) |
+| Order | The core object | number (from a sequence, 10001 up; gaps possible), channel, status, held_from, currency, customer copied on (name, email, shipping/billing address, optional customer_id, not a foreign key yet), total_amount (minor units), placed_at, version |
+| OrderLine | One SKU on an order, copied, not linked to Product yet | position, sku_code, name, quantity, unit_price, line_total (minor units); quantity_shipped comes with shipments |
+| Product (SKU) | What is sold and stocked | sku (fixed once created), name, barcode, weight_grams, version |
+| Location | Warehouse or store | code (fixed once created), name, address, version |
+| InventoryLevel | Stock of one SKU at one location | on_hand, reserved (available = on_hand − reserved; 0 ≤ reserved ≤ on_hand), version |
+| InventoryMovement | Append-only history of every level change | product, location, type, reason, note, on_hand/reserved before and after, actor, occurred_at |
 | Reservation | Stock held for an order line | order_line, inventory_level, quantity |
 | Shipment | A parcel leaving a location | order, lines, carrier, tracking_number, shipped_at |
-| OrderEvent | Audit trail: every state change | order, type, actor, before/after, occurred_at |
+| OrderEvent | Audit trail: creation and every state change | order, type (`created`, `transition`), transition, actor + actor name, before/after, occurred_at |
 | Return | Phase 3 | — |
 
 ## Order states
@@ -37,9 +38,12 @@ erDiagram
 ```
 pending → confirmed → allocated → picking → packed → shipped → delivered
    any pre-shipment state → cancelled | on_hold (and back)
+   release: on_hold → the status it was held from (held_from)
 ```
 
-Transitions go through the state machine only. Confirming an order reserves stock in the same transaction.
+Transitions go through the state machine only (`Domain/Order/OrderStateMachine`; `Order::apply()` is the only way to change a status, and it writes the event in the same flush). Shipped, delivered and cancelled orders cannot be cancelled or held.
+
+**Not yet:** confirming an order must reserve stock in the same transaction. Orders are not linked to products yet, so confirm changes the status only; the reservation is wired in when order lines link to products (marked `TODO(inventory)` in `Order::apply()`).
 
 ## Rules
 

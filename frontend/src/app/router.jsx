@@ -1,5 +1,11 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link } from '@tanstack/react-router';
 import { DashboardPage } from '../features/dashboard/DashboardPage.jsx';
+import { CreateOrderPage } from '../features/orders/CreateOrderPage.jsx';
+import { OrderDetailPage } from '../features/orders/OrderDetailPage.jsx';
+import { OrderListPage } from '../features/orders/OrderListPage.jsx';
+import { LocationsPage } from '../features/inventory/LocationsPage.jsx';
+import { ProductDetailPage } from '../features/inventory/ProductDetailPage.jsx';
+import { ProductsPage } from '../features/inventory/ProductsPage.jsx';
 import { SettingsPage } from '../features/settings/SettingsPage.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import { Layout } from './Layout.jsx';
@@ -23,6 +29,19 @@ const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/',
 
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage });
 
+const productsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products', component: ProductsPage });
+
+const productRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products/$productId', component: ProductDetailPage });
+
+const locationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/locations', component: LocationsPage });
+
+const orderRoutes = [
+  createRoute({ getParentRoute: () => rootRoute, path: '/orders', component: OrderListPage }),
+  // A literal segment outranks a parameter, so /orders/new never reads as an order id.
+  createRoute({ getParentRoute: () => rootRoute, path: '/orders/new', component: CreateOrderPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/orders/$orderId', component: OrderDetailPage }),
+];
+
 // A dev build's playground for the table component; production builds drop it and its fake data.
 const devRoutes = import.meta.env.DEV
   ? [
@@ -35,4 +54,4 @@ const devRoutes = import.meta.env.DEV
   : [];
 
 // Orders, inventory, products and customers get their routes in Phase 1 (ROADMAP.md).
-export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, settingsRoute, ...devRoutes]) });
+export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, ...orderRoutes, productsRoute, productRoute, locationsRoute, settingsRoute, ...devRoutes]) });

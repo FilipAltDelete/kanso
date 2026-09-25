@@ -212,8 +212,11 @@ export function DataTable({
     const cell = event.target.closest('[data-cell]');
     if (!cell || isTyping(event.target)) return;
     const ctrl = event.ctrlKey || event.metaKey;
+    // Where the key was pressed, from the DOM: a click can focus a cell before `active` catches up.
+    const [row, col] = cell.dataset.cell.split(':').map(Number);
+    const here = { row, col };
 
-    const next = moveCell(current, event, { rows: rows.length, cols: leafColumns.length });
+    const next = moveCell(here, event, { rows: rows.length, cols: leafColumns.length });
     if (next) {
       event.preventDefault();
       goTo(next);
@@ -229,14 +232,14 @@ export function DataTable({
     } else if (selectable && event.key === 'Escape' && Object.keys(rowSelection).length > 0) {
       event.preventDefault();
       clearSelection();
-    } else if (event.target === cell && current.row >= 0) {
-      const row = rows[current.row];
+    } else if (event.target === cell && here.row >= 0) {
+      const target = rows[here.row];
       if (event.key === ' ' && selectable) {
         event.preventDefault();
-        row.toggleSelected();
+        target.toggleSelected();
       } else if (event.key === 'Enter' && onRowActivate) {
         event.preventDefault();
-        onRowActivate(row.original);
+        onRowActivate(target.original);
       }
     }
   }

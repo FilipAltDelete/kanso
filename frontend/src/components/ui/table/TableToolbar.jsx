@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
 import { useI18n } from '../../../lib/i18n.jsx';
 import { Button, Input, Select } from '../primitives.jsx';
-import { columnLabel } from './columns.js';
+import { columnLabel, formatDateRange, parseDateRange } from './columns.js';
 
 /** Typing settles for this long before the view (and the URL) follows. */
 const SEARCH_DELAY_MS = 250;
@@ -82,7 +82,9 @@ function SearchField({ value, onChange, inputRef }) {
 function ColumnFilter({ column }) {
   const { t } = useI18n();
   const id = useId();
-  const { options } = column.columnDef.meta.filter;
+  const { options, type } = column.columnDef.meta.filter;
+
+  if (type === 'dateRange') return <DateRangeFilter column={column} />;
 
   return (
     <div className="flex flex-col gap-1">
@@ -98,5 +100,30 @@ function ColumnFilter({ column }) {
         ))}
       </Select>
     </div>
+  );
+}
+
+function DateRangeFilter({ column }) {
+  const { t } = useI18n();
+  const id = useId();
+  const range = parseDateRange(column.getFilterValue());
+  const set = (patch) => column.setFilterValue(formatDateRange({ ...range, ...patch }));
+
+  return (
+    <fieldset className="flex items-end gap-2">
+      <legend className="sr-only">{columnLabel(column)}</legend>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`${id}-from`} className="text-xs font-medium text-slate-600">
+          {t('table.dateFrom', { column: columnLabel(column) })}
+        </label>
+        <Input id={`${id}-from`} type="date" className="w-40" value={range.from} max={range.to || undefined} onChange={(event) => set({ from: event.target.value })} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`${id}-to`} className="text-xs font-medium text-slate-600">
+          {t('table.dateTo')}
+        </label>
+        <Input id={`${id}-to`} type="date" className="w-40" value={range.to} min={range.from || undefined} onChange={(event) => set({ to: event.target.value })} />
+      </div>
+    </fieldset>
   );
 }
