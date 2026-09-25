@@ -1,8 +1,12 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { RouterProvider } from '@tanstack/react-router';
 import { AuthContext } from '../features/auth/AuthProvider.jsx';
 import { I18nProvider } from '../lib/i18n.jsx';
 import { router } from './router.jsx';
+
+// The dashboard asks the API for its numbers; the shell does not need them.
+vi.mock('../api/client.js', () => ({ api: vi.fn(() => new Promise(() => {})), ApiError: class extends Error {} }));
 
 describe('the signed-in shell', () => {
   it('opens on the dashboard with the user in the header', async () => {
@@ -10,9 +14,11 @@ describe('the signed-in shell', () => {
 
     render(
       <I18nProvider locale="sv">
-        <AuthContext.Provider value={{ status: 'authenticated', user, login: vi.fn(), logout: vi.fn() }}>
-          <RouterProvider router={router} />
-        </AuthContext.Provider>
+        <QueryClientProvider client={new QueryClient()}>
+          <AuthContext.Provider value={{ status: 'authenticated', user, login: vi.fn(), logout: vi.fn() }}>
+            <RouterProvider router={router} />
+          </AuthContext.Provider>
+        </QueryClientProvider>
       </I18nProvider>,
     );
 

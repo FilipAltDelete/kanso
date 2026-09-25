@@ -75,6 +75,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [ ] CSV order import; editing orders, partial cancel, notes and tags; payment status
 - [x] Pick lists and packing slips as PDFs (Swedish or English): Twig + dompdf in a worker, stored in S3/MinIO, downloaded through a five-minute signed link; "Print" on the order page (`docs/adr/0007`)
 - [ ] Marking orders shipped with a tracking number; partial shipments
+- [x] Dashboard with real numbers: orders today, awaiting fulfillment, shipped today, orders by status and stock-outs for the browser's calendar day, refreshed every 30 s, each linking to its list (`GET /api/dashboard`)
 
 ---
 
