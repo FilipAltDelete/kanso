@@ -64,6 +64,12 @@ class User
         return $this->name;
     }
 
+    public function changeDetails(string $email, ?string $name): void
+    {
+        $this->email = $email;
+        $this->name = $name;
+    }
+
     public function passwordHash(): ?string
     {
         return $this->passwordHash;
@@ -80,6 +86,22 @@ class User
         return $this->roles;
     }
 
+    /** One role; each includes the ones below it (Role::highest()). */
+    public function role(): string
+    {
+        return Role::highest($this->roles);
+    }
+
+    public function changeRole(string $role): void
+    {
+        $this->roles = [$role];
+    }
+
+    public function isAdmin(): bool
+    {
+        return Role::ADMIN === $this->role();
+    }
+
     public function isEnabled(): bool
     {
         return $this->enabled;
@@ -88,6 +110,11 @@ class User
     public function disable(): void
     {
         $this->enabled = false;
+    }
+
+    public function enable(): void
+    {
+        $this->enabled = true;
     }
 
     public function createdAt(): \DateTimeImmutable

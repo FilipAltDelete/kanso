@@ -6,6 +6,8 @@ import { useShortcutSettings } from '../../lib/ShortcutsProvider.jsx';
 import { saveTheme, savedTheme, THEMES } from '../../lib/theme.js';
 import { cn } from '../../lib/utils.js';
 import { ApiKeySettings } from './ApiKeySettings.jsx';
+import { PasswordSettings } from './PasswordSettings.jsx';
+import { UserSettings } from './UserSettings.jsx';
 
 /**
  * This person's settings. A theme applies and is remembered as soon as it is
@@ -89,6 +91,10 @@ export function SettingsPage() {
       </section>
 
       <ShortcutSettings />
+
+      <PasswordSettings />
+
+      <UserSettings />
 
       <ApiKeySettings />
     </div>

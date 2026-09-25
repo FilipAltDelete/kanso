@@ -105,6 +105,15 @@ export const auth = {
     }
   },
 
+  /** Ends every other session; this one carries on with the tokens in the answer. */
+  async changePassword(currentPassword, newPassword) {
+    const body = tokenResponseSchema.parse(
+      await api('/api/auth/password', { method: 'POST', body: { currentPassword, newPassword } }),
+    );
+    setAccessToken(body.accessToken);
+    return body;
+  },
+
   async me() {
     return currentUserSchema.parse(await api('/api/auth/me'));
   },

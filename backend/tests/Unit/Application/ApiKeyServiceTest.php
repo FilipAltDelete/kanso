@@ -80,6 +80,16 @@ final class ApiKeyServiceTest extends TestCase
             {
             }
 
+            public function search(PageRequest $request): Page
+            {
+                return new Page([$this->admin], 1);
+            }
+
+            public function lockActiveAdmins(): array
+            {
+                return [$this->admin];
+            }
+
             public function count(): int
             {
                 return 1;

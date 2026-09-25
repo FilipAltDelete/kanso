@@ -6,6 +6,8 @@ namespace Kanso\Core\Internal\Application\Security;
 
 use Kanso\Core\Internal\Application\Exception\AuthenticationFailed;
 use Kanso\Core\Internal\Application\Exception\TooManyAttempts;
+use Kanso\Core\Internal\Application\Order\OrderInput;
+use Kanso\Core\Internal\Application\User\PasswordPolicy;
 use Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface;
 use Kanso\Core\Internal\Domain\Security\IssuedTokens;
 use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
@@ -57,6 +59,43 @@ final class AuthenticationService
         if (null === $user || !$user->isEnabled()) {
             throw new AuthenticationFailed('The session has expired. Sign in again.');
         }
+
+        return $this->issue($user);
+    }
+
+    /**
+     * The signed-in user changes their own password. Every session ends,
+     * this one included; the new tokens returned carry this one on, so a
+     * session someone else holds cannot outlive the change.
+     */
+    public function changePassword(string $userId, mixed $currentPassword, mixed $newPassword): IssuedTokens
+    {
+        $user = $this->users->findById($userId);
+        if (null === $user || !$user->isEnabled()) {
+            throw new AuthenticationFailed('The session has expired. Sign in again.');
+        }
+
+        // A stolen access token must not become a way to guess the password.
+        $limiter = $this->loginLimiter->create('password-change|'.$userId);
+        if (!$limiter->consume()->isAccepted()) {
+            throw new TooManyAttempts('Too many attempts. Wait a few minutes and try again.');
+        }
+
+        $check = new OrderInput();
+        $hash = $user->passwordHash();
+        if (!\is_string($currentPassword) || '' === $currentPassword) {
+            $check->violate('currentPassword', 'Enter your current password.', 'required');
+        } elseif (null === $hash || !$this->hasher->verify($hash, $currentPassword)) {
+            $check->violate('currentPassword', 'This is not your current password.', 'wrong_password');
+        }
+        $newPassword = PasswordPolicy::check($check, $newPassword, 'newPassword');
+        $check->throwIfInvalid();
+        \assert(null !== $newPassword);
+
+        $limiter->reset();
+        $user->setPasswordHash($this->hasher->hash($newPassword));
+        $this->users->save($user);
+        $this->refreshTokens->revokeAllFor($userId);
 
         return $this->issue($user);
     }

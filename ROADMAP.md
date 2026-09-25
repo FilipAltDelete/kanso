@@ -82,6 +82,7 @@ A web-based **Order Management System** for e-commerce and retail: it takes in o
 - [x] Product audit trail: who created or changed a product, when, through the API or a CSV import, with the fields before and after; unchanged edits record nothing; "Product changes" on the product page (`GET /api/product-events`, `docs/adr/0013`)
 - [x] Import history: every product and order import run for real, with who, when, the file name, its counts and its failed rows; "Recent imports" on both import pages (`GET /api/import-runs`, `docs/adr/0014`)
 - [x] Bulk status changes on the order list (confirm, hold, release, cancel and the rest): each order moves on its own, and the ones that cannot are listed with the reason; a bulk cancel asks first (`POST /api/orders/bulk-transitions`, `docs/adr/0015`)
+- [x] Users in the browser: admins list, add (with a first password; no invitation email), edit the role of, set a password for, and deactivate or activate users under Settings → Users (`/api/users`); always at least one active admin, and nobody deactivates themselves; a deactivated user is signed out at once; everyone changes their own password under Settings (`POST /api/auth/password`) (`docs/adr/0017`)
 
 ---
 

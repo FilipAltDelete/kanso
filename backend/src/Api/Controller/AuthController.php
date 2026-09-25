@@ -13,6 +13,7 @@ use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
@@ -68,6 +69,26 @@ final class AuthController
         $response->headers->clearCookie(self::REFRESH_COOKIE, self::COOKIE_PATH, null, $request->isSecure(), true, Cookie::SAMESITE_STRICT);
 
         return $response;
+    }
+
+    /**
+     * `{currentPassword, newPassword}`. Every other session of this user ends;
+     * this one goes on with the new tokens in the answer, as after a login.
+     */
+    #[Route('/password', name: 'auth_password', methods: ['POST'])]
+    public function changePassword(Request $request, #[CurrentUser] UserInterface $user): JsonResponse
+    {
+        $identifier = $user->getUserIdentifier();
+        if (str_starts_with($identifier, ApiKey::IDENTIFIER_PREFIX)) {
+            throw new AccessDeniedException('An API key has no password.');
+        }
+
+        $payload = $this->decode($request);
+
+        return $this->tokenResponse(
+            $this->authentication->changePassword($identifier, $payload['currentPassword'] ?? null, $payload['newPassword'] ?? null),
+            $request,
+        );
     }
 
     #[Route('/me', name: 'auth_me', methods: ['GET'])]

@@ -6,91 +6,28 @@ namespace Kanso\Core\Tests\Unit\Application;
 
 use Kanso\Core\Internal\Application\Exception\AuthenticationFailed;
 use Kanso\Core\Internal\Application\Exception\TooManyAttempts;
+use Kanso\Core\Internal\Application\Exception\ValidationFailed;
 use Kanso\Core\Internal\Application\Security\AuthenticationService;
 use Kanso\Core\Internal\Domain\Security\AccessTokenIssuerInterface;
 use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
-use Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface;
 use Kanso\Core\Internal\Domain\User\Role;
 use Kanso\Core\Internal\Domain\User\User;
-use Kanso\Core\Internal\Domain\User\UserStoreInterface;
+use Kanso\Core\Tests\Support\InMemoryRefreshTokens;
+use Kanso\Core\Tests\Support\InMemoryUsers;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
 final class AuthenticationServiceTest extends TestCase
 {
-    private UserStoreInterface $users;
-    private RefreshTokenStoreInterface $refreshTokens;
+    private InMemoryUsers $users;
+    private InMemoryRefreshTokens $refreshTokens;
     private AuthenticationService $service;
 
     protected function setUp(): void
     {
-        $this->users = new class implements UserStoreInterface {
-            /** @var array<string, User> */
-            private array $byId = [];
-
-            public function findById(string $id): ?User
-            {
-                return $this->byId[$id] ?? null;
-            }
-
-            public function findByEmail(string $email): ?User
-            {
-                foreach ($this->byId as $user) {
-                    if ($user->email() === $email) {
-                        return $user;
-                    }
-                }
-
-                return null;
-            }
-
-            public function save(User $user): void
-            {
-                $this->byId[(string) $user->id()] = $user;
-            }
-
-            public function count(): int
-            {
-                return \count($this->byId);
-            }
-        };
-
-        $this->refreshTokens = new class implements RefreshTokenStoreInterface {
-            /** @var array<string, string> */
-            private array $tokens = [];
-
-            public function issue(string $userId): string
-            {
-                $token = bin2hex(random_bytes(8));
-                $this->tokens[$token] = $userId;
-
-                return $token;
-            }
-
-            public function consume(string $token): ?string
-            {
-                $userId = $this->tokens[$token] ?? null;
-                unset($this->tokens[$token]);
-
-                return $userId;
-            }
-
-            public function revoke(string $token): void
-            {
-                unset($this->tokens[$token]);
-            }
-
-            public function revokeAllFor(string $userId): void
-            {
-                $this->tokens = array_filter($this->tokens, static fn (string $id): bool => $id !== $userId);
-            }
-
-            public function ttl(): int
-            {
-                return 3600;
-            }
-        };
+        $this->users = new InMemoryUsers();
+        $this->refreshTokens = new InMemoryRefreshTokens();
 
         $hasher = new class implements PasswordHasherInterface {
             public function hash(string $plainPassword): string
@@ -176,6 +113,71 @@ final class AuthenticationServiceTest extends TestCase
 
         $this->expectException(AuthenticationFailed::class);
         $this->service->refresh($first->refreshToken);
+    }
+
+    public function testChangingThePasswordEndsEveryOtherSession(): void
+    {
+        $user = $this->user('ops@example.com', 'secret');
+        $here = $this->service->login('ops@example.com', 'secret', '127.0.0.1');
+        $elsewhere = $this->service->login('ops@example.com', 'secret', '10.0.0.1');
+
+        $tokens = $this->service->changePassword((string) $user->id(), 'secret', 'a longer one');
+
+        self::assertSame('hashed:a longer one', $user->passwordHash());
+        self::assertSame([$tokens->refreshToken], array_keys($this->refreshTokens->tokens), 'only the new session is left');
+        self::assertNotSame($here->refreshToken, $tokens->refreshToken);
+        self::assertNotSame($elsewhere->refreshToken, $tokens->refreshToken);
+    }
+
+    public function testChangingThePasswordTakesTheCurrentOneAndAGoodNewOne(): void
+    {
+        $user = $this->user('ops@example.com', 'secret');
+
+        try {
+            $this->service->changePassword((string) $user->id(), 'wrong', 'short');
+            self::fail('Expected a validation failure.');
+        } catch (ValidationFailed $e) {
+            self::assertSame(
+                [['currentPassword', 'wrong_password'], ['newPassword', 'too_short']],
+                array_map(static fn (array $v): array => [$v['path'], $v['code']], $e->violations()),
+            );
+        }
+
+        try {
+            $this->service->changePassword((string) $user->id(), null, 42);
+            self::fail('Expected a validation failure.');
+        } catch (ValidationFailed $e) {
+            self::assertSame(
+                [['currentPassword', 'required'], ['newPassword', 'type']],
+                array_map(static fn (array $v): array => [$v['path'], $v['code']], $e->violations()),
+            );
+        }
+
+        self::assertSame('hashed:secret', $user->passwordHash());
+    }
+
+    public function testGuessingTheCurrentPasswordIsThrottled(): void
+    {
+        $user = $this->user('ops@example.com', 'secret');
+
+        for ($i = 0; $i < 3; ++$i) {
+            try {
+                $this->service->changePassword((string) $user->id(), 'guess'.$i, 'a longer one');
+            } catch (ValidationFailed) {
+            }
+        }
+
+        $this->expectException(TooManyAttempts::class);
+        $this->service->changePassword((string) $user->id(), 'secret', 'a longer one');
+    }
+
+    public function testADeactivatedUserCannotChangeTheirPassword(): void
+    {
+        $user = $this->user('ops@example.com', 'secret');
+        $user->disable();
+
+        $this->expectException(AuthenticationFailed::class);
+        $this->service->changePassword((string) $user->id(), 'secret', 'a longer one');
     }
 
     private function user(string $email, string $password): User

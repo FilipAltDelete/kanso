@@ -48,6 +48,8 @@ make logs / down / reset
 
 - `POST /api/auth/login` → access token (15 min) in the body, refresh token as an HttpOnly cookie
 - `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
+- `POST /api/auth/password` (`{"currentPassword", "newPassword"}`, at least 8 characters): changes the signed-in user's own password, ends their other sessions and answers with new tokens, like a login
+- Users: an admin adds people (with a first password to pass on; no email is sent), changes their role, sets a forgotten password and deactivates or activates them under Settings → Users, or through `/api/users` (`docs/adr/0017`). There is always at least one active admin. The console's `kanso:user:create` still works.
 - Integrations authenticate with an API key instead: `X-Api-Key: kso_…` or `Authorization: Bearer kso_…`.
   An admin creates and revokes keys under Settings → API keys (`/api/api-keys` in the API), or from the console:
   `php bin/console kanso:api-key:create "Shopify sync" --role=ROLE_OPERATOR [--expires="+90 days"] [--created-by=admin@example.com]`
