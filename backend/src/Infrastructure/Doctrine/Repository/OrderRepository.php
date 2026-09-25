@@ -16,6 +16,7 @@ use Kanso\Core\Internal\Domain\Order\OrderStatus;
 use Kanso\Core\Internal\Domain\Order\OrderStoreInterface;
 use Kanso\Core\Internal\Domain\Order\OrderTag;
 use Kanso\Core\Internal\Domain\Order\PaymentStatus;
+use Kanso\Core\Internal\Domain\Order\Shipment;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
@@ -119,6 +120,19 @@ final class OrderRepository implements OrderStoreInterface
         }
         if (null !== $query->placedBefore) {
             $builder->andWhere('o.placedAt < :placedBefore')->setParameter('placedBefore', $query->placedBefore);
+        }
+        if (null !== $query->shippedFrom || null !== $query->shippedBefore) {
+            // One shipment in the range is enough: a partly shipped order shipped that day too.
+            $shipped = 'SELECT 1 FROM '.Shipment::class.' s WHERE s.order = o';
+            if (null !== $query->shippedFrom) {
+                $shipped .= ' AND s.shippedAt >= :shippedFrom';
+                $builder->setParameter('shippedFrom', $query->shippedFrom);
+            }
+            if (null !== $query->shippedBefore) {
+                $shipped .= ' AND s.shippedAt < :shippedBefore';
+                $builder->setParameter('shippedBefore', $query->shippedBefore);
+            }
+            $builder->andWhere('EXISTS ('.$shipped.')');
         }
         if ('' !== $query->search) {
             // Contains, so a surname finds "Anna Andersson". A scan, but a

@@ -29,6 +29,10 @@ final readonly class OrderQuery
         public ?string $customerId = null,
         public array $tags = [],
         public array $paymentStatuses = [],
+        /** Only orders with a shipment shipped at or after this instant. */
+        public ?\DateTimeImmutable $shippedFrom = null,
+        /** Only orders with a shipment shipped before this instant. */
+        public ?\DateTimeImmutable $shippedBefore = null,
     ) {
     }
 }

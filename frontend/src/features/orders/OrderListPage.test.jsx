@@ -68,6 +68,17 @@ describe('the order list', () => {
     expect(router.state.location.search).toMatchObject({ 'f.status': 'shipped', 'f.placedAt': '2026-09-01..' });
   });
 
+  it('filters by the day orders shipped without showing a column for it', async () => {
+    answer();
+    renderAt('/orders?f.shippedAt=2026-09-26..2026-09-26');
+
+    await screen.findByRole('link', { name: '10001' });
+    expect(lastListQuery().get('shippedFrom')).toBe(new Date(2026, 8, 26).toISOString());
+    expect(lastListQuery().get('shippedBefore')).toBe(new Date(2026, 8, 27).toISOString());
+    expect(screen.getByLabelText('Shipped from').value).toBe('2026-09-26');
+    expect(screen.queryByRole('columnheader', { name: /Shipped/ })).toBeNull();
+  });
+
   it('opens an order with Enter', async () => {
     answer();
     const router = renderAt('/orders');

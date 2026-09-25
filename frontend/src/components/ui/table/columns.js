@@ -10,6 +10,9 @@
  *           { type: 'dateRange' } adds from/to date fields; the value is
  *           "YYYY-MM-DD..YYYY-MM-DD" (either side may be empty), both days
  *           inclusive, in the viewer's time zone
+ *   hidden  true keeps the column out of the grid but its filter in the
+ *           toolbar: a list can filter on something it does not show, such as
+ *           the day an order shipped
  */
 export function columnLabel(column) {
   const { header, meta } = column.columnDef;

@@ -48,6 +48,14 @@ export function OrderListPage() {
         meta: { filter: { type: 'dateRange' } },
         cell: ({ getValue }) => <time dateTime={getValue()}>{dateTime(getValue())}</time>,
       },
+      {
+        // Filter only: an order can ship in several parcels on several days.
+        id: 'shippedAt',
+        accessorFn: () => null,
+        header: t('order.shippedAt'),
+        enableSorting: false,
+        meta: { filter: { type: 'dateRange' }, hidden: true },
+      },
       { id: 'customerName', accessorFn: (order) => order.customer.name, header: t('order.customer') },
       {
         id: 'channel',

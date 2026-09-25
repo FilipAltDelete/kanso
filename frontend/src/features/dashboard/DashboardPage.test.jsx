@@ -46,6 +46,15 @@ describe('the dashboard', () => {
     expect(router.state.location.search).toEqual({ 'f.placedAt': '2026-09-26..2026-09-26' });
   });
 
+  it('links shipped today to the orders with a shipment today', async () => {
+    api.mockResolvedValue(dashboardFixture());
+    const router = renderAt('/');
+
+    fireEvent.click(await screen.findByRole('link', { name: /Shipped today\s*5/ }));
+
+    await waitFor(() => expect(router.state.location.search).toEqual({ 'f.shippedAt': '2026-09-26..2026-09-26' }));
+  });
+
   it('links the fulfillment queue to the orders in those statuses', async () => {
     api.mockResolvedValue(dashboardFixture());
     const router = renderAt('/');

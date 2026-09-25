@@ -115,6 +115,12 @@ export function DataTable({
     ];
   }, [columns, selectable, t, getRowLabel]);
 
+  // Filter-only columns (`meta.hidden`) are never drawn.
+  const columnVisibility = useMemo(
+    () => Object.fromEntries(columns.filter((column) => column.meta?.hidden).map((column) => [column.id ?? column.accessorKey, false])),
+    [columns],
+  );
+
   const table = useReactTable({
     data,
     columns: allColumns,
@@ -125,6 +131,7 @@ export function DataTable({
       columnFilters: view.columnFilters,
       pagination: { pageIndex: view.pageIndex, pageSize: view.pageSize },
       rowSelection,
+      columnVisibility,
     },
     onSortingChange: (updater) => update({ sorting: functionalUpdate(updater, view.sorting), pageIndex: 0 }),
     onGlobalFilterChange: (updater) => update({ globalFilter: functionalUpdate(updater, view.globalFilter) ?? '', pageIndex: 0 }),

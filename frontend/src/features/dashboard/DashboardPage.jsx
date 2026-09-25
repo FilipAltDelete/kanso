@@ -23,7 +23,7 @@ export function DashboardPage() {
   const kpis = [
     { key: 'kpi.ordersToday', value: data?.ordersToday, to: '/orders', search: data ? { 'f.placedAt': `${data.date}..${data.date}` } : undefined },
     { key: 'kpi.awaitingFulfillment', value: data?.awaitingFulfillment, to: '/orders', search: { 'f.status': AWAITING_FULFILLMENT.join(',') } },
-    { key: 'kpi.shippedToday', value: data?.shippedToday, to: '/orders', search: { 'f.status': 'shipped' } },
+    { key: 'kpi.shippedToday', value: data?.shippedToday, to: '/orders', search: data ? { 'f.shippedAt': `${data.date}..${data.date}` } : undefined },
     { key: 'kpi.stockOuts', value: data?.stockOuts.count, to: '/', hash: 'stock-outs' },
   ];
   const noOrders = data ? ORDER_STATUSES.every((status) => data.ordersByStatus[status] === 0) : false;

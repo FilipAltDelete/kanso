@@ -491,6 +491,8 @@ final class OrderService
         $search = $check->text($parameters['q'] ?? null, 'q', self::MAX_SEARCH, false) ?? '';
         $placedFrom = $check->instant($parameters['placedFrom'] ?? null, 'placedFrom');
         $placedBefore = $check->instant($parameters['placedBefore'] ?? null, 'placedBefore');
+        $shippedFrom = $check->instant($parameters['shippedFrom'] ?? null, 'shippedFrom');
+        $shippedBefore = $check->instant($parameters['shippedBefore'] ?? null, 'shippedBefore');
         $customerId = $check->uuid($parameters['customer'] ?? null, 'customer');
 
         $check->throwIfInvalid();
@@ -507,6 +509,8 @@ final class OrderService
             customerId: $customerId,
             tags: $this->list($parameters['tag'] ?? null),
             paymentStatuses: $paymentStatuses,
+            shippedFrom: $shippedFrom,
+            shippedBefore: $shippedBefore,
         ));
     }
 

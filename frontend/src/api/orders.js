@@ -128,10 +128,12 @@ export function orderListQuery(view) {
   if (view.globalFilter) params.set('q', view.globalFilter);
 
   for (const { id, value } of view.columnFilters) {
-    if (id === 'placedAt') {
+    if (id === 'placedAt' || id === 'shippedAt') {
+      // Placed in the range, or with a shipment shipped in it.
+      const prefix = id === 'placedAt' ? 'placed' : 'shipped';
       const [from, to] = String(value).split('..');
-      if (from) params.set('placedFrom', localMidnight(from));
-      if (to) params.set('placedBefore', localMidnight(to, 1));
+      if (from) params.set(`${prefix}From`, localMidnight(from));
+      if (to) params.set(`${prefix}Before`, localMidnight(to, 1));
     } else if (id === 'status' || id === 'channel' || id === 'paymentStatus') {
       params.set(id, String(value));
     } else if (id === 'tags') {
