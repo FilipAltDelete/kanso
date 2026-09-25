@@ -1,4 +1,4 @@
-# ADR-0008: Notes are order events; tags and notes do not move the order's version; payment status does
+# ADR-0010: Notes are order events; tags and notes do not move the order's version; payment status does
 
 - Status: accepted
 - Date: 2026-09-27

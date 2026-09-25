@@ -32,7 +32,7 @@ erDiagram
 | InventoryMovement | Append-only history of every level change | product, location, type, reason, note, on_hand/reserved before and after, actor, occurred_at |
 | Reservation | Stock held for an order line — in code, `order_line.reserved_quantity` at the order's `location` (one location per order in Phase 1; ADR-0005) | order_line, location, quantity |
 | Shipment | A parcel leaving a location | order, lines, carrier, tracking_number, shipped_at |
-| OrderTag | A free-text label on an order, for filtering and bulk work (ADR-0008) | order, name (1–64 characters, no comma; unique per order ignoring case); at most 20 per order |
+| OrderTag | A free-text label on an order, for filtering and bulk work (ADR-0010) | order, name (1–64 characters, no comma; unique per order ignoring case); at most 20 per order |
 | OrderEvent | Audit trail: creation, every state change, notes, tag and payment status changes | order, type (`created`, `transition`, `note`, `tags_changed`, `payment_status_changed`), transition, actor + actor name, before/after, occurred_at |
 | Document | A generated PDF for an order (pick list, packing slip) and the job that makes it | type, order, order_version, locale, status (queued/running/done/failed), storage_key, requested_by |
 | Return | Phase 3 | — |
