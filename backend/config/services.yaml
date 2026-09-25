@@ -34,6 +34,10 @@ services:
             - '../src/Domain/Security/ApiKey.php'
             # Entities and values; the store interfaces are aliased below.
             - '../src/Domain/Order/'
+            - '../src/Domain/Security/Actor.php'
+            - '../src/Domain/Customer/'
+            - '../src/Application/Customer/CustomerInput.php'
+            - '../src/Application/Customer/Violations.php'
             - '../src/Infrastructure/Security/ApiKeyRateLimited.php'
             - '../src/Application/Exception/'
             # Entities and values, not services.
@@ -59,6 +63,7 @@ services:
     Kanso\Core\Internal\Domain\Catalog\ProductStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\ProductRepository'
     Kanso\Core\Internal\Domain\Inventory\LocationStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\LocationRepository'
     Kanso\Core\Internal\Domain\Inventory\InventoryStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\InventoryRepository'
+    Kanso\Core\Internal\Domain\Customer\CustomerStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\CustomerRepository'
     Kanso\Core\Internal\Domain\Health\HealthCheckInterface: '@Kanso\Core\Internal\Infrastructure\Health\HealthChecker'
     Kanso\Core\Internal\Domain\Observability\MetricsInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
     Kanso\Core\Internal\Domain\Observability\MetricsExporterInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'

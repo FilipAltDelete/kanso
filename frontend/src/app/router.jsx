@@ -1,4 +1,7 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link } from '@tanstack/react-router';
+import { CustomerDetailPage } from '../features/customers/CustomerDetailPage.jsx';
+import { EditCustomerPage, NewCustomerPage } from '../features/customers/CustomerFormPages.jsx';
+import { CustomersPage } from '../features/customers/CustomersPage.jsx';
 import { DashboardPage } from '../features/dashboard/DashboardPage.jsx';
 import { CreateOrderPage } from '../features/orders/CreateOrderPage.jsx';
 import { OrderDetailPage } from '../features/orders/OrderDetailPage.jsx';
@@ -46,6 +49,13 @@ const orderRoutes = [
   createRoute({ getParentRoute: () => rootRoute, path: '/orders/$orderId', component: OrderDetailPage }),
 ];
 
+const customerRoutes = [
+  createRoute({ getParentRoute: () => rootRoute, path: '/customers', component: CustomersPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/customers/new', component: NewCustomerPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/customers/$customerId', component: CustomerDetailPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/customers/$customerId/edit', component: EditCustomerPage }),
+];
+
 // A dev build's playground for the table component; production builds drop it and its fake data.
 const devRoutes = import.meta.env.DEV
   ? [
@@ -57,5 +67,5 @@ const devRoutes = import.meta.env.DEV
     ]
   : [];
 
-// Orders, inventory, products and customers get their routes in Phase 1 (ROADMAP.md).
-export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, ...orderRoutes, productsRoute, productImportRoute, productRoute, locationsRoute, settingsRoute, ...devRoutes]) });
+// Every Phase 1 module now has its routes (ROADMAP.md).
+export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, ...orderRoutes, ...customerRoutes, productsRoute, productImportRoute, productRoute, locationsRoute, settingsRoute, ...devRoutes]) });

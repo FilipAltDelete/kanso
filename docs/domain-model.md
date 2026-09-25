@@ -1,6 +1,6 @@
 # Domain model (draft)
 
-Phase 0 deliverable: the entities Phase 1 builds. In code so far: `User`, `Product`, `Location`, `InventoryLevel` and `InventoryMovement` (catalog and inventory), and `Channel`, `Order`, `OrderLine` and `OrderEvent` (orders); the rest is a draft. Names and fields will change as Phase 1 lands; update this file when they do.
+Phase 0 deliverable: the entities Phase 1 builds. In code so far: `User` and `ApiKey`; `Customer` with `CustomerAddress` and `CustomerEvent` (customers); `Product`, `Location`, `InventoryLevel` and `InventoryMovement` (catalog and inventory); and `Channel`, `Order`, `OrderLine` and `OrderEvent` (orders). The rest is a draft. Names and fields will change as Phase 1 lands; update this file when they do.
 
 ```mermaid
 erDiagram
@@ -21,7 +21,9 @@ erDiagram
 |---|---|---|
 | User | Signs in to the web UI | email, name, roles, enabled |
 | Channel | Where an order came from (manual, CSV, Shopify…) | code, name, type, currency (default for new orders); `manual` is seeded |
-| Customer | Buyer | email, name, addresses |
+| Customer | Buyer | email (unique, case-insensitive), name, phone |
+| CustomerAddress | A customer's billing or shipping address; several of each, one default per type | type, is_default, recipient, company, lines, postal_code, city, region, country_code (ISO 3166-1), phone |
+| CustomerEvent | Audit trail of customer changes | customer, type (created/updated), actor, changes (before/after per field), occurred_at |
 | Order | The core object | number (from a sequence, 10001 up; gaps possible), channel, status, held_from, currency, customer copied on (name, email, shipping/billing address, optional customer_id, not a foreign key yet), total_amount (minor units), placed_at, version |
 | OrderLine | One SKU on an order, copied, not linked to Product yet | position, sku_code, name, quantity, unit_price, line_total (minor units); quantity_shipped comes with shipments |
 | Product (SKU) | What is sold and stocked | sku (fixed once created), name, barcode, weight_grams, version |

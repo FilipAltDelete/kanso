@@ -18,7 +18,7 @@ import { useAuth } from '../features/auth/AuthProvider.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import { cn } from '../lib/utils.js';
 import { LanguageSelect } from './LanguageSelect.jsx';
-import { NavFolder, NavLink, UpcomingLink } from './nav/NavLink.jsx';
+import { NavFolder, NavLink } from './nav/NavLink.jsx';
 import { activeHref, loadCollapsed, loadFolders, saveCollapsed, saveFolders } from './nav/navState.js';
 
 /** The pages of each folder; the icons are what the collapsed rail shows. */
@@ -35,7 +35,7 @@ const FOLDERS = [
 
 const ADMIN_TOOLS = [{ href: '/products/import', labelKey: 'nav.importProducts', icon: Upload }];
 
-const HREFS = ['/', '/orders', '/settings', ...FOLDERS.flatMap((folder) => folder.items.map((item) => item.href)), ...ADMIN_TOOLS.map((item) => item.href)];
+const HREFS = ['/', '/orders', '/customers', '/settings', ...FOLDERS.flatMap((folder) => folder.items.map((item) => item.href)), ...ADMIN_TOOLS.map((item) => item.href)];
 
 /**
  * The signed-in shell: the menu on the left, as in Pimsen, and the page. The
@@ -148,9 +148,9 @@ export function Layout() {
             );
           })}
 
-          <UpcomingLink icon={Users} collapsed={collapsed} note={t('nav.comingSoon')}>
+          <NavLink href="/customers" icon={Users} active={active === '/customers'} collapsed={collapsed}>
             {t('nav.customers')}
-          </UpcomingLink>
+          </NavLink>
         </div>
 
         <div className={cn('border-t border-slate-200', collapsed ? 'space-y-1 px-2 py-2' : 'p-2')}>
