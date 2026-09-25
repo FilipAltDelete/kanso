@@ -23,11 +23,14 @@
         "ext-redis": "*",
         "ext-sodium": "*",
         "api-platform/core": "^4.1",
+        "async-aws/s3": "^2.0",
         "doctrine/dbal": "^4.2",
         "doctrine/doctrine-bundle": "^2.13",
         "doctrine/doctrine-migrations-bundle": "^3.4",
         "doctrine/orm": "^3.5",
+        "dompdf/dompdf": "^3.0",
         "kanso/contracts": "^0.1",
+        "league/flysystem-async-aws-s3": "^3.0",
         "lexik/jwt-authentication-bundle": "^3.1",
         "nyholm/psr7": "^1.8",
         "open-telemetry/exporter-otlp": "^1.0",
@@ -50,7 +53,8 @@
         "symfony/serializer": "^7.4",
         "symfony/uid": "^7.4",
         "symfony/validator": "^7.4",
-        "symfony/yaml": "^7.4"
+        "symfony/yaml": "^7.4",
+        "twig/twig": "^3.14"
     },
     "require-dev": {
         "dama/doctrine-test-bundle": "^8.2",

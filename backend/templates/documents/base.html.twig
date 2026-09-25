@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="{{ locale }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}{% endblock %} {{ order.number }}</title>
+    <style>
+        @page { margin: 18mm 16mm 20mm 16mm; }
+        body { font-family: "DejaVu Sans", sans-serif; font-size: 10pt; color: #111; }
+        h1 { font-size: 18pt; margin: 0 0 2mm 0; }
+        .meta { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
+        .meta td { vertical-align: top; padding: 0; }
+        .meta dt { font-size: 8pt; color: #555; text-transform: uppercase; letter-spacing: 0.5pt; margin-top: 2mm; }
+        .meta dd { margin: 0; }
+        .address { line-height: 1.4; }
+        table.lines { width: 100%; border-collapse: collapse; }
+        table.lines th { font-size: 8pt; color: #555; text-transform: uppercase; letter-spacing: 0.5pt; text-align: left; border-bottom: 1.5pt solid #111; padding: 2mm 2mm 1.5mm 2mm; }
+        table.lines td { border-bottom: 0.5pt solid #bbb; padding: 2.5mm 2mm; vertical-align: top; }
+        table.lines .num { text-align: right; white-space: nowrap; }
+        table.lines .sku { font-family: "DejaVu Sans Mono", monospace; font-size: 9pt; white-space: nowrap; }
+        table.lines tfoot td { border-bottom: none; font-weight: bold; }
+        .box { display: inline-block; width: 4mm; height: 4mm; border: 1pt solid #111; }
+        .sign { margin-top: 8mm; width: 100%; page-break-inside: avoid; }
+        .sign td { width: 50%; padding-right: 8mm; }
+        .sign .line { border-bottom: 0.75pt solid #111; height: 8mm; }
+        .sign .caption { font-size: 8pt; color: #555; }
+        {# The page number ("1 / 2") is drawn by the renderer: dompdf has no CSS page counter. #}
+        .footer { position: fixed; bottom: -12mm; left: 0; right: 0; font-size: 7.5pt; color: #777; }
+    </style>
+</head>
+<body>
+    <div class="footer">
+        {{ labels.order }} {{ order.number }} · {{ labels.generated }} {{ generatedAt }}
+    </div>
+    {% block body %}{% endblock %}
+</body>
+</html>

@@ -36,5 +36,11 @@
         <server name="KERNEL_CLASS" value="Kanso\Core\Internal\Kernel"/>
         <!-- Forced, so a dev container's DATABASE_URL can never point the suite at real data. -->
         <env name="DATABASE_URL" value="mysql://kanso:kanso@mysql:3306/kanso_test?serverVersion=8.4.0&amp;charset=utf8mb4" force="true"/>
+        <!-- The compose MinIO, in its own bucket (created by minio-init, and by CI). -->
+        <env name="S3_ENDPOINT" value="http://minio:9000" force="true"/>
+        <env name="S3_PUBLIC_ENDPOINT" value="http://localhost:19010" force="true"/>
+        <env name="S3_BUCKET" value="kanso-test" force="true"/>
+        <env name="S3_KEY" value="kanso" force="true"/>
+        <env name="S3_SECRET" value="kanso-secret" force="true"/>
     </php>
 </phpunit>

@@ -1,5 +1,12 @@
 parameters:
     kanso.version: '0.1.0-dev'
+    # S3-compatible stores that are not AWS ignore the region, but the client
+    # needs one to sign with.
+    kanso.s3.default_region: 'us-east-1'
+    # The fallback for S3_PUBLIC_ENDPOINT has to be a parameter, not another env
+    # var, so the internal endpoint is bound here to be fallen back to.
+    kanso.s3.endpoint: '%env(string:default::S3_ENDPOINT)%'
+    kanso.document_templates: '%kanso.core_dir%/templates/documents'
     # Which Redis database a test run uses (see when@test below).
     env(KANSO_TEST_REDIS_DB): '15'
 
@@ -37,6 +44,8 @@ services:
             - '../src/Domain/Customer/'
             - '../src/Application/Customer/CustomerInput.php'
             - '../src/Application/Customer/Violations.php'
+            - '../src/Domain/Document/{Document,DocumentType,DocumentStatus}.php'
+            - '../src/Application/Document/{GenerateDocument,DocumentLabels,OrderDocumentData}.php'
             - '../src/Infrastructure/Security/ApiKeyRateLimited.php'
             - '../src/Application/Exception/'
             # Entities and values, not services.
@@ -63,6 +72,10 @@ services:
     Kanso\Core\Internal\Domain\Inventory\LocationStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\LocationRepository'
     Kanso\Core\Internal\Domain\Inventory\InventoryStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\InventoryRepository'
     Kanso\Core\Internal\Domain\Customer\CustomerStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\CustomerRepository'
+    Kanso\Core\Internal\Domain\Document\DocumentStoreInterface: '@Kanso\Core\Internal\Infrastructure\Doctrine\Repository\DocumentRepository'
+    Kanso\Core\Internal\Domain\Document\TemplateRendererInterface: '@Kanso\Core\Internal\Infrastructure\Document\TwigTemplateRenderer'
+    Kanso\Core\Internal\Domain\Document\PdfRendererInterface: '@Kanso\Core\Internal\Infrastructure\Document\DompdfRenderer'
+    Kanso\Core\Internal\Domain\Storage\ObjectStorageInterface: '@Kanso\Core\Internal\Infrastructure\Storage\S3ObjectStorage'
     Kanso\Core\Internal\Domain\Health\HealthCheckInterface: '@Kanso\Core\Internal\Infrastructure\Health\HealthChecker'
     Kanso\Core\Internal\Domain\Observability\MetricsInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
     Kanso\Core\Internal\Domain\Observability\MetricsExporterInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
@@ -102,6 +115,43 @@ services:
     Kanso\Core\Internal\Infrastructure\Observability\Tracing\Tracing:
         arguments:
             $provider: '@kanso.tracer_provider'
+
+    # Any S3-compatible store (as in Pimsen). `pathStyleEndpoint` is what makes
+    # MinIO and most self-hosted stores work: the bucket is a path segment, not
+    # a subdomain.
+    AsyncAws\S3\S3Client:
+        arguments:
+            -
+                endpoint: '%env(string:default::S3_ENDPOINT)%'
+                accessKeyId: '%env(string:default::S3_KEY)%'
+                accessKeySecret: '%env(string:default::S3_SECRET)%'
+                region: '%env(string:default:kanso.s3.default_region:S3_REGION)%'
+                pathStyleEndpoint: true
+
+    # Signs URLs for browsers: same credentials, the address the browser can
+    # reach; falls back to the internal endpoint where they are the same.
+    kanso.s3.presigner:
+        class: AsyncAws\S3\S3Client
+        arguments:
+            -
+                endpoint: '%env(string:default:kanso.s3.endpoint:S3_PUBLIC_ENDPOINT)%'
+                accessKeyId: '%env(string:default::S3_KEY)%'
+                accessKeySecret: '%env(string:default::S3_SECRET)%'
+                region: '%env(string:default:kanso.s3.default_region:S3_REGION)%'
+                pathStyleEndpoint: true
+
+    Kanso\Core\Internal\Infrastructure\Storage\S3ObjectStorage:
+        arguments:
+            $presigner: '@kanso.s3.presigner'
+            $bucket: '%env(string:default::S3_BUCKET)%'
+
+    Kanso\Core\Internal\Infrastructure\Document\TwigTemplateRenderer:
+        arguments:
+            $templateDir: '%kanso.document_templates%'
+
+    Kanso\Core\Internal\Infrastructure\Document\DompdfRenderer:
+        arguments:
+            $templateDir: '%kanso.document_templates%'
 
     # Redis serves cache, locks, refresh tokens and metric counters — never queue data.
     Redis:
