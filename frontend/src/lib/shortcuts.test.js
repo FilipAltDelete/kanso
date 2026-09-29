@@ -1,4 +1,5 @@
-import { messages } from './i18n.jsx';
+import en from './messages/en.js';
+import sv from './messages/sv.js';
 import { createMatcher, isShortcutEvent, loadShortcutsEnabled, saveShortcutsEnabled, SHORTCUT_GROUPS, SHORTCUTS } from './shortcuts.js';
 
 const active = (...ids) => SHORTCUTS.filter((shortcut) => ids.includes(shortcut.id));
@@ -11,11 +12,11 @@ function clock() {
 describe('the shortcut registry', () => {
   it('has a label in both languages and a help section for every shortcut', () => {
     for (const shortcut of SHORTCUTS) {
-      expect(messages.en[shortcut.labelKey], shortcut.id).toBeTruthy();
-      expect(messages.sv[shortcut.labelKey], shortcut.id).toBeTruthy();
+      expect(en[shortcut.labelKey], shortcut.id).toBeTruthy();
+      expect(sv[shortcut.labelKey], shortcut.id).toBeTruthy();
       expect(SHORTCUT_GROUPS).toContain(shortcut.group);
     }
-    for (const group of SHORTCUT_GROUPS) expect(messages.sv[`shortcuts.group.${group}`]).toBeTruthy();
+    for (const group of SHORTCUT_GROUPS) expect(sv[`shortcuts.group.${group}`]).toBeTruthy();
   });
 
   it('gives no two shortcuts that can be on at once the same keys, nor one the start of another', () => {

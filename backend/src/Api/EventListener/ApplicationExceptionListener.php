@@ -26,6 +26,7 @@ final class ApplicationExceptionListener
             $exception->title(),
             $exception->getMessage(),
             $exception->violations(),
+            $exception->headers(),
         ));
     }
 }

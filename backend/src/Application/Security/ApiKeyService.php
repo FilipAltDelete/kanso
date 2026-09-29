@@ -15,7 +15,8 @@ use Psr\Clock\ClockInterface;
 
 /**
  * Creating and revoking API keys. The plain key leaves this service exactly
- * once, from create(); only its hash is stored.
+ * once, from create(); only its hash is stored. Both go to the security log,
+ * by the key's id.
  */
 final class ApiKeyService
 {
@@ -26,6 +27,7 @@ final class ApiKeyService
         private readonly ApiKeyStoreInterface $keys,
         private readonly UserStoreInterface $users,
         private readonly ClockInterface $clock,
+        private readonly SecurityLog $log,
     ) {
     }
 
@@ -75,6 +77,7 @@ final class ApiKeyService
         $plainKey = ApiKey::PREFIX.rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         $key = new ApiKey($name, ApiKey::hash($plainKey), $role, $creator?->id(), $now, $expiresAt);
         $this->keys->save($key);
+        $this->log->apiKeyCreated((string) $key->id(), $role, null === $creator ? null : (string) $creator->id());
 
         return ['key' => $key, 'plainKey' => $plainKey];
     }
@@ -105,15 +108,20 @@ final class ApiKeyService
         return $this->create(\is_string($name) ? $name : '', \is_string($role) ? $role : '', $expiresAt, $createdBy);
     }
 
-    public function revoke(string $id): ApiKey
+    /** @param string|null $actorId the signed-in admin's id; null from the console */
+    public function revoke(string $id, ?string $actorId = null): ApiKey
     {
         $key = $this->keys->findById($id);
         if (null === $key) {
             throw new ValidationFailed([['path' => 'id', 'message' => \sprintf('No API key "%s".', $id), 'code' => 'unknown_api_key']]);
         }
 
+        $wasRevoked = $key->isRevoked();
         $key->revoke($this->clock->now());
         $this->keys->save($key);
+        if (!$wasRevoked) {
+            $this->log->apiKeyRevoked((string) $key->id(), $actorId);
+        }
 
         return $key;
     }

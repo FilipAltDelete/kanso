@@ -16,8 +16,9 @@ use Kanso\Core\Internal\Api\State\RequestDocumentProcessor;
  * a pick list or a packing slip. Asking for one
  * queues it; poll it until `status` is `done`, then open `downloadUrl`, a
  * signed link straight to object storage that works for five minutes. Read
- * the document again for a fresh link. Printing changes nothing, so anyone
- * signed in may.
+ * the document again for a fresh link. Asking for a document writes a row,
+ * a job and a file, so it takes an operator; anyone signed in may read one
+ * (ADR-0019).
  */
 #[ApiResource(
     shortName: 'Document',
@@ -29,7 +30,8 @@ use Kanso\Core\Internal\Api\State\RequestDocumentProcessor;
             input: DocumentRequestInput::class,
             read: false,
             processor: RequestDocumentProcessor::class,
-            description: 'Queue a pick list or packing slip for the order as it is now. An unchanged order gets back the document it already has.',
+            security: "is_granted('ROLE_OPERATOR')",
+            description: 'Queue a pick list or packing slip for the order as it is now. An unchanged order gets back the document it already has. Needs the operator role.',
         ),
         new Get(uriTemplate: '/documents/{id}', provider: DocumentProvider::class),
     ],

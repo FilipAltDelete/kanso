@@ -3,15 +3,22 @@ import { FileText, Printer, RotateCw } from 'lucide-react';
 import { DOCUMENT_TYPES, useDocument, useRequestDocument } from '../../api/documents.js';
 import { Button, ErrorNotice } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
+import { useCanOperate } from './shared.jsx';
 
 /**
  * "Print" for an order: asks the API for a pick list or packing slip, waits
  * while a worker renders it, then offers the PDF. The link opens the store's
  * signed URL in a new tab, where the browser's PDF viewer prints it. The
  * document is written in the language the UI is in.
+ *
+ * For operators only: asking for a document stores a row, a job and a file,
+ * so the API refuses a viewer (ADR-0019).
  */
 export function PrintDocuments({ order }) {
   const { t } = useI18n();
+  const canOperate = useCanOperate();
+
+  if (!canOperate) return null;
 
   return (
     <section aria-labelledby="order-print" className="space-y-2">

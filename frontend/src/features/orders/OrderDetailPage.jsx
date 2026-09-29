@@ -4,6 +4,7 @@ import { ArrowLeft, PackageX, Pencil, Truck } from 'lucide-react';
 import { useCorrectShipment, useOrder, useTransitionOrder, useVoidShipment } from '../../api/orders.js';
 import { Badge, Button, Card, ErrorNotice, Input, Spinner } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
+import { useHoldLiveRefresh } from '../../lib/liveQuery.js';
 import { formatMoney } from '../../lib/money.js';
 import { CancelItemsDialog } from './CancelItemsDialog.jsx';
 import { EditOrderDialog } from './EditOrderDialog.jsx';
@@ -424,10 +425,11 @@ function ShipmentCard({ order, shipment, number }) {
           {t('shipment.voidedBy', { name: shipment.voidedBy?.name ?? '' })} · <time dateTime={shipment.voidedAt}>{dateTime(shipment.voidedAt)}</time>
           {shipment.voidReason ? <> · {shipment.voidReason}</> : null}
         </p>
-      ) : (
+      ) : canOperate ? (
+        // Printing, correcting and voiding are all an operator's (ADR-0019).
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <PrintDocument order={order} type="packing_slip" shipmentId={shipment.id} label={t('shipment.packingSlip')} />
-          {canOperate && mode === null ? (
+          {mode === null ? (
             <>
               <Button size="sm" variant="ghost" onClick={() => setMode('correct')}>
                 {t('shipment.correct')}
@@ -440,7 +442,7 @@ function ShipmentCard({ order, shipment, number }) {
             </>
           ) : null}
         </div>
-      )}
+      ) : null}
       {mode === 'correct' ? <CorrectShipment order={order} shipment={shipment} onDone={() => setMode(null)} /> : null}
       {mode === 'void' ? <VoidShipment order={order} shipment={shipment} onDone={() => setMode(null)} /> : null}
     </Card>
@@ -451,6 +453,8 @@ function ShipmentCard({ order, shipment, number }) {
 function CorrectShipment({ order, shipment, onDone }) {
   const { t } = useI18n();
   const correct = useCorrectShipment(order.id);
+  // Saved with the version it was opened on; see useHoldLiveRefresh.
+  useHoldLiveRefresh({ queryKey: ['order', order.id] });
   const [carrier, setCarrier] = useState(shipment.carrier ?? '');
   const [tracking, setTracking] = useState(shipment.trackingNumber ?? '');
   const carrierId = useId();
@@ -499,6 +503,7 @@ function CorrectShipment({ order, shipment, onDone }) {
 function VoidShipment({ order, shipment, onDone }) {
   const { t } = useI18n();
   const voidShipment = useVoidShipment(order.id);
+  useHoldLiveRefresh({ queryKey: ['order', order.id] });
   const [reason, setReason] = useState('');
   const reasonId = useId();
 

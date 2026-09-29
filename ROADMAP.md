@@ -51,15 +51,15 @@ This roadmap lists what Kanso lacks compared with a complete web-based Order Man
 **Goal:** the current features are safe to run for a pilot merchant on a real host.
 
 **Security**
-- [ ] Security headers and a strict Content Security Policy at the proxy (none are set)
-- [ ] TLS termination documented and `TRUSTED_PROXIES` set, so the refresh cookie is `Secure` and the login limiter sees the real client address (neither holds behind a TLS proxy)
-- [ ] Login throttling per address and in total, not only per email and address; a limit on `/api/auth/refresh`; the same response time for unknown and known accounts
-- [ ] Refresh token reuse detection that revokes the whole token family; atomic token consumption
-- [ ] Document generation requires Operator (a Viewer can create documents, jobs and stored files)
+- [x] Security headers and a strict Content Security Policy at the proxy (none are set) ([ADR-0018](docs/adr/0018-security-headers-and-proxy-trust.md))
+- [x] TLS termination documented and `TRUSTED_PROXIES` set, so the refresh cookie is `Secure` and the login limiter sees the real client address (neither holds behind a TLS proxy) ([ADR-0018](docs/adr/0018-security-headers-and-proxy-trust.md))
+- [x] Login throttling per address and in total, not only per email and address; a limit on `/api/auth/refresh`; the same response time for unknown and known accounts ([ADR-0019](docs/adr/0019-authentication-hardening.md))
+- [x] Refresh token reuse detection that revokes the whole token family; atomic token consumption ([ADR-0019](docs/adr/0019-authentication-hardening.md))
+- [x] Document generation requires Operator (a Viewer can create documents, jobs and stored files) ([ADR-0019](docs/adr/0019-authentication-hardening.md))
 - [ ] Refuse to start in production with the default `APP_SECRET`; require a password change at the first admin login
 - [ ] `/metrics` protected by more than the proxy's routing; `/health/ready` without raw exception messages
-- [ ] The web and proxy images run as a non-root user
-- [ ] A security log for failed logins, role changes and key creation (the core writes no log lines of its own)
+- [x] The web and proxy images run as a non-root user ([ADR-0018](docs/adr/0018-security-headers-and-proxy-trust.md))
+- [x] A security log for failed logins, role changes and key creation (the core writes no log lines of its own) ([ADR-0019](docs/adr/0019-authentication-hardening.md))
 - [ ] An audit trail for users, API keys and locations
 
 **Correctness**
@@ -75,11 +75,12 @@ This roadmap lists what Kanso lacks compared with a complete web-based Order Man
 - [ ] Tests for currencies with 0 and 3 decimals, concurrent confirmation across several products, and an adjustment racing a reservation
 
 **Frontend**
-- [ ] An error boundary (a render error blanks the whole app)
-- [ ] An expired session returns to the login page (the UI stays signed in and shows 401 errors)
-- [ ] Code splitting per route, languages loaded on demand, and compression in the frontend's Nginx
+- [x] An error boundary (a render error blanks the whole app) ([ADR-0020](docs/adr/0020-frontend-error-and-session-handling.md))
+- [x] An expired session returns to the login page (the UI stays signed in and shows 401 errors) ([ADR-0020](docs/adr/0020-frontend-error-and-session-handling.md))
+- [x] Code splitting per route, and languages loaded on demand ([ADR-0020](docs/adr/0020-frontend-error-and-session-handling.md))
+- [x] Compression in the frontend's Nginx ([ADR-0018](docs/adr/0018-security-headers-and-proxy-trust.md))
 - [ ] The remaining hard-coded English strings and unformatted numbers go through `t()` and the locale helpers
-- [ ] Order list and order detail refresh on their own (only the dashboard polls)
+- [x] Order list and order detail refresh on their own (only the dashboard polls) ([ADR-0020](docs/adr/0020-frontend-error-and-session-handling.md))
 - [ ] Accessibility: a keyboard alternative to dragging tabs, 24 px targets, unique ids when a page is open in two tabs, a page title per route, axe tests in CI
 - [ ] Tablet: the sidebar collapses by itself, and tab handling works by touch
 

@@ -55,7 +55,7 @@ final class AuthController
     public function refresh(Request $request): JsonResponse
     {
         return $this->tokenResponse(
-            $this->authentication->refresh($request->cookies->get(self::REFRESH_COOKIE)),
+            $this->authentication->refresh($request->cookies->get(self::REFRESH_COOKIE), (string) $request->getClientIp()),
             $request,
         );
     }

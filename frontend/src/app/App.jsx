@@ -5,27 +5,40 @@ import { AuthProvider, useAuth } from '../features/auth/AuthProvider.jsx';
 import { LoginPage } from '../features/auth/LoginPage.jsx';
 import { I18nProvider, useI18n } from '../lib/i18n.jsx';
 import { ShortcutsProvider } from '../lib/ShortcutsProvider.jsx';
+import { AppErrorBoundary } from './errors.jsx';
 import { Layout } from './Layout.jsx';
 import { WorkspaceProvider } from './workspace/WorkspaceProvider.jsx';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: (failureCount, error) => !(error instanceof ApiError) && failureCount < 2,
+export function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Pages that keep themselves up to date say so (lib/liveQuery.js).
+        refetchOnWindowFocus: false,
+        retry: (failureCount, error) => !(error instanceof ApiError) && failureCount < 2,
+      },
     },
-  },
-});
+  });
+}
 
-export function App() {
+const defaultQueryClient = createQueryClient();
+
+/**
+ * The session is restored while the language catalog downloads: the auth
+ * provider sits outside the i18n one, which renders nothing until its catalog
+ * is in. The last-resort error boundary is outside everything.
+ */
+export function App({ queryClient = defaultQueryClient }) {
   return (
-    <I18nProvider>
+    <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <Gate />
+          <I18nProvider>
+            <Gate />
+          </I18nProvider>
         </AuthProvider>
       </QueryClientProvider>
-    </I18nProvider>
+    </AppErrorBoundary>
   );
 }
 
@@ -41,6 +54,8 @@ function Gate() {
     );
   }
 
+  // Also when a session runs out: the pages go, and the tabs are saved for
+  // whoever signs in next — the same person finds them as they were.
   if (status !== 'authenticated') return <LoginPage />;
 
   // Keyed by user: signing in as someone else starts from their tabs, not the last person's.

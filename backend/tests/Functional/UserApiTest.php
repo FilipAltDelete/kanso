@@ -6,8 +6,10 @@ namespace Kanso\Core\Tests\Functional;
 
 use Kanso\Core\Internal\Domain\User\Role;
 use Kanso\Core\Tests\Support\SignsIn;
+use Monolog\Handler\TestHandler;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\BrowserKit\Cookie;
 
 /**
  * Managing users over REST (/api/users) and changing one's own password
@@ -79,8 +81,7 @@ final class UserApiTest extends WebTestCase
 
         $this->client->request('GET', '/api/auth/me', server: ['HTTP_AUTHORIZATION' => 'Bearer '.$theirToken]);
         self::assertResponseStatusCodeSame(401);
-        $this->client->getCookieJar()->clear();
-        $this->client->request('POST', '/api/auth/refresh', server: ['HTTP_COOKIE' => 'kanso_refresh='.$theirRefresh]);
+        $this->refreshWith($theirRefresh);
         self::assertResponseStatusCodeSame(401);
         self::assertSame(401, $this->login($user['email'], 'first password'));
 
@@ -164,12 +165,40 @@ final class UserApiTest extends WebTestCase
         $newRefresh = $this->client->getCookieJar()->get('kanso_refresh', '/api/auth')?->getValue();
         self::assertNotSame($oldRefresh, $newRefresh);
 
-        $this->client->getCookieJar()->clear();
-        $this->client->request('POST', '/api/auth/refresh', server: ['HTTP_COOKIE' => 'kanso_refresh='.$oldRefresh]);
+        $this->refreshWith($oldRefresh);
         self::assertResponseStatusCodeSame(401, 'the session from before the change is over');
+        $this->refreshWith((string) $newRefresh);
+        self::assertResponseIsSuccessful('the session that made the change goes on');
 
         self::assertSame(401, $this->login($email, 'secret'));
         self::assertSame(200, $this->login($email, 'a new password'));
+    }
+
+    /** Each change, with the admin who made it, in the security log (ADR-0019). */
+    public function testChangesToWhoMayDoWhatAreLoggedWithTheAdmin(): void
+    {
+        $this->signInAs(Role::ADMIN);
+        $adminId = $this->api('GET', '/api/auth/me')['id'];
+        $user = $this->newUser(Role::OPERATOR);
+        self::assertSame(['user_created', $user['id'], $adminId], $this->lastLogged('user_id'));
+
+        $steps = [
+            ['PATCH', '/api/users/'.$user['id'], ['role' => Role::VIEWER], ['user_role_changed', $user['id'], $adminId]],
+            ['POST', '/api/users/'.$user['id'].'/password', ['password' => 'a new password'], ['password_changed', $user['id'], $adminId]],
+            ['POST', '/api/users/'.$user['id'].'/deactivate', null, ['user_deactivated', $user['id'], $adminId]],
+            ['POST', '/api/users/'.$user['id'].'/activate', null, ['user_activated', $user['id'], $adminId]],
+        ];
+        foreach ($steps as [$method, $uri, $body, $expected]) {
+            $this->api($method, $uri, $body);
+            self::assertSame(200, $this->responseStatus(), $uri);
+            self::assertSame($expected, $this->lastLogged('user_id'), $uri);
+        }
+
+        $key = $this->api('POST', '/api/api-keys', ['name' => 'Integration', 'role' => Role::OPERATOR]);
+        self::assertSame(['api_key_created', $key['id'], $adminId], $this->lastLogged('api_key_id'));
+        $this->api('POST', '/api/api-keys/'.$key['id'].'/revoke');
+        self::assertSame(['api_key_revoked', $key['id'], $adminId], $this->lastLogged('api_key_id'));
+        self::assertStringNotContainsString($key['key'], json_encode(array_map(static fn ($r): array => $r->toArray(), $this->securityLog()->getRecords()), \JSON_THROW_ON_ERROR));
     }
 
     public function testAnApiKeyHasNoPasswordToChange(): void
@@ -189,6 +218,32 @@ final class UserApiTest extends WebTestCase
         self::assertSame(201, $this->responseStatus());
 
         return $user;
+    }
+
+    private function securityLog(): TestHandler
+    {
+        $handler = static::getContainer()->get('monolog.handler.security');
+        self::assertInstanceOf(TestHandler::class, $handler);
+
+        return $handler;
+    }
+
+    /** @return list<mixed> the last request's last security log line: event, the given id, actor */
+    private function lastLogged(string $idField): array
+    {
+        $records = $this->securityLog()->getRecords();
+        self::assertNotEmpty($records);
+        $last = $records[\count($records) - 1];
+
+        return [$last->context['event'], $last->context[$idField] ?? null, $last->context['actor_id'] ?? null];
+    }
+
+    /** Through the cookie jar: the test client ignores a Cookie header. */
+    private function refreshWith(string $token): void
+    {
+        $this->client->getCookieJar()->clear();
+        $this->client->getCookieJar()->set(new Cookie('kanso_refresh', $token, null, '/api/auth'));
+        $this->client->request('POST', '/api/auth/refresh');
     }
 
     /** Signs in without touching the admin's token; returns the status. */

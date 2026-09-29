@@ -1,4 +1,9 @@
 monolog:
+    # The security log (Application\Security\SecurityLog, ADR-0019): sign-ins,
+    # sessions, roles and API keys. Not Symfony's own `security` channel,
+    # which logs every authenticated request.
+    channels: ['kanso_security']
+
     handlers:
         main:
             type: stream
@@ -6,6 +11,16 @@ monolog:
             path: 'php://stderr'
             level: info
             formatter: monolog.formatter.json
+            channels: ['!kanso_security']
+        # Its own handler, so an installation can send the security log
+        # somewhere else, or keep it longer, by overriding this one handler.
+        # The same stream by default: a container's log is its stderr.
+        security:
+            type: stream
+            path: 'php://stderr'
+            level: info
+            formatter: monolog.formatter.json
+            channels: ['kanso_security']
 
 when@dev:
     monolog:
@@ -13,7 +28,7 @@ when@dev:
             main:
                 level: debug
                 # Every event dispatch is a debug line; they drown the rest.
-                channels: ['!event']
+                channels: ['!event', '!kanso_security']
 
 when@test:
     monolog:
@@ -23,3 +38,7 @@ when@test:
                 path: 'php://stderr'
                 level: error
                 formatter: monolog.formatter.json
+            # Kept in memory, where the suite reads it back.
+            security:
+                type: test
+                level: info

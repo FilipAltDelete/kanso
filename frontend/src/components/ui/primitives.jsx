@@ -1,4 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
+import { errorMessage } from '../../lib/errorMessage.js';
+import { useI18n } from '../../lib/i18n.jsx';
+import { useHoldLiveRefresh } from '../../lib/liveQuery.js';
 import { cn } from '../../lib/utils.js';
 
 export function Button({ className, variant = 'default', size = 'default', ...props }) {
@@ -87,11 +90,13 @@ export function Skeleton({ className }) {
   return <div className={cn('h-3 animate-pulse rounded bg-slate-100', className)} />;
 }
 
-export function Spinner({ label = 'Loading' }) {
+export function Spinner({ label }) {
+  const { t } = useI18n();
+
   return (
     <div className="flex items-center gap-2 text-sm text-slate-500" role="status">
       <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
-      {label}
+      {label ?? t('common.loading')}
     </div>
   );
 }
@@ -106,9 +111,11 @@ export function EmptyState({ title, children }) {
 }
 
 export function ErrorNotice({ error }) {
+  const { t } = useI18n();
+
   return (
     <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
-      {error?.message ?? 'Something went wrong.'}
+      {errorMessage(error, t)}
       {error?.violations?.length ? (
         <ul className="mt-1 list-inside list-disc">
           {error.violations.map((violation) => (
@@ -157,11 +164,16 @@ export function Field({ label, hint, error, required = false, requiredLabel, chi
  * A modal on the native <dialog>: the browser traps focus, Escape closes it,
  * and focus returns to what opened it. It opens on mount; `onClose` runs
  * however it was closed. `dialogRef` lets the content close it.
+ *
+ * While one is open, live pages do not refresh themselves: a dialog's fields
+ * start from the record as it was when it opened, and are saved with that
+ * version (lib/liveQuery.js).
  */
 export function Dialog({ title, description, dialogRef, onClose, className, children }) {
   const ownRef = useRef(null);
   const ref = dialogRef ?? ownRef;
   const titleId = useId();
+  useHoldLiveRefresh();
 
   useEffect(() => {
     const dialog = ref.current;

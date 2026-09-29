@@ -24,7 +24,11 @@ USER $UID
 EXPOSE 8080
 CMD ["npm", "run", "dev"]
 
+# Unprivileged: the stock image's `nginx` user, numeric so a platform can
+# verify it is not root. The config keeps pid and temp files in /tmp.
 FROM nginx:1.27-alpine AS web
-COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+RUN rm /etc/nginx/conf.d/default.conf
+COPY docker/frontend/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+USER 101:101
 EXPOSE 8080

@@ -18,7 +18,7 @@ Phase 1 needs pick lists and packing slips as PDFs, and later phases add labels,
   - `GET /api/documents/{id}` returns the status and, once done, a `downloadUrl` presigned for five minutes, with `Content-Disposition: inline; filename="pick-list-<number>.pdf"`.
   - When the worker gives up (retries spent, or an unrecoverable failure), a `WorkerMessageFailedEvent` listener marks the document failed. The reason is kept in the database and the logs, not in the API, because it can name internal hosts.
 - **Reuse by order version.** A request for the same order version, type and language gets back the document that is done, or queued or running for less than ten minutes. A changed order (every change bumps `version`) gets a fresh document. A document queued longer than that is presumed lost (no worker) and not handed out again.
-- **Anyone signed in may print.** A document only reads an order; it changes nothing.
+- **Anyone signed in may print.** A document only reads an order; it changes nothing. *(Amended by ADR-0019: asking for a document needs Operator, because each request stores a row, a job and a file. Reading one still needs only a sign-in.)*
 - **Pick lists show SKU, name, quantity and a box to tick; packing slips carry no prices**, since they travel in the parcel and may go with a gift.
 
 ## Consequences

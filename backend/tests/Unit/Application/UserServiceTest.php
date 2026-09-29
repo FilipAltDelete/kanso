@@ -7,6 +7,7 @@ namespace Kanso\Core\Tests\Unit\Application;
 use Kanso\Core\Internal\Application\Exception\Conflict;
 use Kanso\Core\Internal\Application\Exception\NotFound;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
+use Kanso\Core\Internal\Application\Security\SecurityLog;
 use Kanso\Core\Internal\Application\User\UserService;
 use Kanso\Core\Internal\Domain\Common\TransactionInterface;
 use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
@@ -14,6 +15,9 @@ use Kanso\Core\Internal\Domain\User\Role;
 use Kanso\Core\Internal\Domain\User\User;
 use Kanso\Core\Tests\Support\InMemoryRefreshTokens;
 use Kanso\Core\Tests\Support\InMemoryUsers;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
+use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 
@@ -21,6 +25,7 @@ final class UserServiceTest extends TestCase
 {
     private InMemoryUsers $users;
     private InMemoryRefreshTokens $refreshTokens;
+    private TestHandler $log;
     private UserService $service;
     private User $admin;
 
@@ -38,6 +43,11 @@ final class UserServiceTest extends TestCase
             {
                 return $hash === 'hashed:'.$plainPassword;
             }
+
+            public function decoyHash(): string
+            {
+                return 'hashed:decoy';
+            }
         };
         $transaction = new class implements TransactionInterface {
             public function run(callable $work): mixed
@@ -50,7 +60,8 @@ final class UserServiceTest extends TestCase
             }
         };
 
-        $this->service = new UserService($this->users, $hasher, new MockClock('2026-09-25 12:00:00'), $transaction, $this->refreshTokens);
+        $this->log = new TestHandler();
+        $this->service = new UserService($this->users, $hasher, new MockClock('2026-09-25 12:00:00'), $transaction, $this->refreshTokens, new SecurityLog(new Logger('kanso_security', [$this->log])));
         $this->admin = $this->service->create('admin@example.com', 'admin', [Role::ADMIN]);
     }
 
@@ -164,6 +175,37 @@ final class UserServiceTest extends TestCase
 
         self::assertSame('hashed:second one', $user->passwordHash());
         self::assertSame([], $this->refreshTokens->tokens);
+    }
+
+    public function testChangesToWhoMayDoWhatAreLoggedWithWhoMadeThem(): void
+    {
+        $by = (string) $this->admin->id();
+        $user = $this->service->createFromRequest(['email' => 'pia@example.com', 'name' => 'Pia', 'role' => Role::OPERATOR, 'password' => 'first one'], $by);
+        $id = (string) $user->id();
+
+        $this->service->update($id, ['name' => 'Pia S']);
+        $this->service->update($id, ['role' => Role::VIEWER], $by);
+        $this->service->setPassword($id, 'second one', $by);
+        $this->service->deactivate($id, $by);
+        $this->service->deactivate($id, $by);
+        $this->service->activate($id, $by);
+        $this->service->activate($id, $by);
+
+        self::assertSame([
+            ['user_created', $id, $by, Role::OPERATOR, null, null],
+            ['user_role_changed', $id, $by, null, Role::OPERATOR, Role::VIEWER],
+            ['password_changed', $id, $by, null, null, null],
+            ['user_deactivated', $id, $by, null, null, null],
+            ['user_activated', $id, $by, null, null, null],
+        ], array_map(
+            static fn (LogRecord $r): array => [$r->context['event'], $r->context['user_id'], $r->context['actor_id'], $r->context['role'] ?? null, $r->context['from'] ?? null, $r->context['to'] ?? null],
+            \array_slice($this->log->getRecords(), 1),
+        ), 'a rename, and a repeated (de)activation, change nothing that matters');
+        self::assertSame(['user_created', null], [$this->log->getRecords()[0]->context['event'], $this->log->getRecords()[0]->context['actor_id']], 'the admin from setUp, made at the console');
+        $logged = json_encode(array_map(static fn (LogRecord $r): array => $r->toArray(), $this->log->getRecords()), \JSON_THROW_ON_ERROR);
+        foreach (['first one', 'second one', 'pia@example.com'] as $secret) {
+            self::assertStringNotContainsString($secret, $logged);
+        }
     }
 
     public function testAnUnknownUserIsNotFound(): void

@@ -36,12 +36,12 @@ final class UserProcessor implements ProcessorInterface
         $id = (string) ($uriVariables['id'] ?? '');
 
         return UserProvider::present(match (true) {
-            $data instanceof UserInput => $this->users->createFromRequest(get_object_vars($data)),
+            $data instanceof UserInput => $this->users->createFromRequest(get_object_vars($data), $this->actorId()),
             // get_object_vars() leaves out what the patch did not carry.
-            $data instanceof UserPatch => $this->users->update($id, get_object_vars($data)),
-            $data instanceof UserPasswordInput => $this->users->setPassword($id, $data->password),
+            $data instanceof UserPatch => $this->users->update($id, get_object_vars($data), $this->actorId()),
+            $data instanceof UserPasswordInput => $this->users->setPassword($id, $data->password, $this->actorId()),
             self::DEACTIVATE === $operation->getName() => $this->users->deactivate($id, $this->actorId()),
-            self::ACTIVATE === $operation->getName() => $this->users->activate($id),
+            self::ACTIVATE === $operation->getName() => $this->users->activate($id, $this->actorId()),
             default => throw new \LogicException(\sprintf('No user operation "%s".', $operation->getName())),
         });
     }

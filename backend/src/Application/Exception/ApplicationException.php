@@ -27,4 +27,10 @@ abstract class ApplicationException extends \RuntimeException
     {
         return $this->violations;
     }
+
+    /** @return array<string, string> response headers the problem comes with */
+    public function headers(): array
+    {
+        return [];
+    }
 }

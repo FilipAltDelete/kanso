@@ -20,6 +20,9 @@ services:
             $adminPassword: '%env(string:default::KANSO_ADMIN_PASSWORD)%'
             $environment: '%kernel.environment%'
             $loginLimiter: '@limiter.login'
+            $loginAddressLimiter: '@limiter.login_address'
+            $loginTotalLimiter: '@limiter.login_total'
+            $refreshLimiter: '@limiter.refresh'
             $apiKeyLimiter: '@limiter.api_key'
             # The code of the location orders reserve from when they name none.
             $defaultLocationCode: '%env(string:default::KANSO_DEFAULT_LOCATION)%'
@@ -38,6 +41,7 @@ services:
             - '../src/Domain/User/User.php'
             - '../src/Domain/User/Role.php'
             - '../src/Domain/Security/IssuedTokens.php'
+            - '../src/Domain/Security/ConsumedRefreshToken.php'
             - '../src/Domain/Security/ApiKey.php'
             # Entities and values; the store interfaces are aliased below.
             - '../src/Domain/Order/'
@@ -83,6 +87,11 @@ services:
     Kanso\Core\Internal\Domain\Health\HealthCheckInterface: '@Kanso\Core\Internal\Infrastructure\Health\HealthChecker'
     Kanso\Core\Internal\Domain\Observability\MetricsInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
     Kanso\Core\Internal\Domain\Observability\MetricsExporterInterface: '@Kanso\Core\Internal\Infrastructure\Observability\PrometheusMetrics'
+
+    # The security log has its own channel and handler (monolog.yaml, ADR-0019).
+    Kanso\Core\Internal\Application\Security\SecurityLog:
+        arguments:
+            $logger: '@monolog.logger.kanso_security'
 
     Kanso\Core\Internal\Infrastructure\Security\LexikAccessTokenIssuer:
         arguments:

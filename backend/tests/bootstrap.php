@@ -28,3 +28,15 @@ passthru(sprintf(
 if (0 !== $exitCode) {
     throw new RuntimeException('Migrating the test database failed; is MySQL up (make up)?');
 }
+
+// Every test signs in from the same address, and the sign-in limits count
+// failures per address and in total (ADR-0019): a run starts with none.
+passthru(sprintf(
+    '%s %s/bin/console cache:pool:clear kanso.rate_limiter --env=test --quiet',
+    PHP_BINARY,
+    dirname(__DIR__),
+), $exitCode);
+
+if (0 !== $exitCode) {
+    throw new RuntimeException('Clearing the rate limits failed; is Redis up (make up)?');
+}

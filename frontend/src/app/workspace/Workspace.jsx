@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { FileText, LayoutDashboard, MapPin, Package, Settings, ShoppingCart, Table2, Upload, Users, X } from 'lucide-react';
-import { FrontTabProvider } from '../../lib/frontTab.js';
+import { FrontTabProvider, ShownTabProvider } from '../../lib/frontTab.js';
 import { useI18n } from '../../lib/i18n.jsx';
 import { cn } from '../../lib/utils.js';
+import { ErrorBoundary, PageError } from '../errors.jsx';
 import { createTabRouter } from '../router.jsx';
 import { MAX_PANES, activeTab, canClose, layoutBoxes, pathOf, paneIds } from './workspace.js';
 import { newId, useWorkspace } from './WorkspaceProvider.jsx';
@@ -383,21 +384,15 @@ export function useTabTitle(href) {
  * One tab's page, under its own router, placed over its pane. Kept mounted
  * while another tab is in front, so coming back finds it scrolled where it was
  * with its dialog open.
+ *
+ * A page that fails to render shows an error in its own tab, and every other
+ * tab carries on (ADR-0020): the router catches what a page throws
+ * (RouteError), and the boundary here whatever gets past it — the router
+ * itself included. Reloading from here starts the tab's router afresh, at the
+ * address the tab is on, as a browser reloads a page.
  */
 function TabView({ id, pane, active, front, box }) {
-  const { state, dispatch, open, navigated, register } = useWorkspace();
-  const [router] = useState(() => createTabRouter(state.tabs[id].href));
-
-  useEffect(() => {
-    register(id, router);
-    return () => register(id, null);
-  }, [id, router, register]);
-
-  useEffect(() => router.history.subscribe(({ location, action }) => navigated(id, location.href, action.type)), [id, router, navigated]);
-
-  // The workspace re-renders on every change to it — each pixel a divider is
-  // dragged — and the page has no reason to follow.
-  const page = useMemo(() => <RouterProvider router={router} />, [router]);
+  const { dispatch, open } = useWorkspace();
 
   // Ctrl-, cmd- or middle-click on a link inside a page opens it as a tab
   // here rather than as a second copy of the whole app in a browser tab.
@@ -425,9 +420,34 @@ function TabView({ id, pane, active, front, box }) {
     >
       {/* A flex column, so a list page fills its pane and only its table scrolls (DataTable `fill`). */}
       <div className="flex h-full min-w-0 flex-col overflow-auto p-4 md:p-6">
-        <FrontTabProvider value={front}>{page}</FrontTabProvider>
+        <ErrorBoundary fallback={({ error, reset }) => <PageError error={error} onReload={reset} />}>
+          <TabPage id={id} active={active} front={front} />
+        </ErrorBoundary>
       </div>
     </div>
+  );
+}
+
+/** The page itself: the tab's router, made when the tab opens, or reloads. */
+function TabPage({ id, active, front }) {
+  const { state, navigated, register } = useWorkspace();
+  const [router] = useState(() => createTabRouter(state.tabs[id].href));
+
+  useEffect(() => {
+    register(id, router);
+    return () => register(id, null);
+  }, [id, router, register]);
+
+  useEffect(() => router.history.subscribe(({ location, action }) => navigated(id, location.href, action.type)), [id, router, navigated]);
+
+  // The workspace re-renders on every change to it — each pixel a divider is
+  // dragged — and the page has no reason to follow.
+  const page = useMemo(() => <RouterProvider router={router} />, [router]);
+
+  return (
+    <ShownTabProvider value={active}>
+      <FrontTabProvider value={front}>{page}</FrontTabProvider>
+    </ShownTabProvider>
   );
 }
 

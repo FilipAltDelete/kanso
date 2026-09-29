@@ -68,10 +68,13 @@ describe('printing from the order page', () => {
     await waitFor(() => expect(api.mock.calls.filter(([path, options]) => path === '/api/orders/o1/documents' && options?.method === 'POST')).toHaveLength(2));
   });
 
-  it('is there for viewers too: printing changes nothing', async () => {
+  it('is not offered to a viewer, whom the API would refuse', async () => {
     answer([documentFixture()]);
     renderAt('/orders/o1', { user: viewer });
+    await screen.findByRole('heading', { name: 'Order 10001' });
 
-    expect(await screen.findByRole('button', { name: 'Packing slip' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Print' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pick list' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Packing slip' })).toBeNull();
   });
 });

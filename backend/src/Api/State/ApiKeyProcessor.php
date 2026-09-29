@@ -31,9 +31,10 @@ final class ApiKeyProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ApiKeyResource
     {
+        // Only a signed-in admin gets here: no key can have the admin role.
+        $user = $this->security->getUser()?->getUserIdentifier() ?? throw new AccessDeniedException();
+
         if ($data instanceof ApiKeyInput) {
-            // Only a signed-in admin gets here: no key can have the admin role.
-            $user = $this->security->getUser()?->getUserIdentifier() ?? throw new AccessDeniedException();
             ['key' => $key, 'plainKey' => $plainKey] = $this->apiKeys->createFromRequest(get_object_vars($data), $user);
 
             return $this->provider->present($key, $plainKey);
@@ -44,6 +45,6 @@ final class ApiKeyProcessor implements ProcessorInterface
             throw new NotFoundHttpException('No such API key.');
         }
 
-        return $this->provider->present($this->apiKeys->revoke($id));
+        return $this->provider->present($this->apiKeys->revoke($id, $user));
     }
 }

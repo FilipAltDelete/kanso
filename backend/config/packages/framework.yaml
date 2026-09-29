@@ -29,10 +29,35 @@ framework:
 
     lock: '%env(REDIS_URL)%'
 
+    # Sign-in and session limits (ADR-0019). A project raises one in its own
+    # config/packages/ without copying this file.
     rate_limiter:
+        # Attempts per email and client address; a success forgives them.
         login:
             policy: sliding_window
             limit: 10
+            interval: '15 minutes'
+            cache_pool: kanso.rate_limiter
+        # Failed sign-ins per client address, whatever the email: one
+        # password tried on many accounts. Successes do not count, so an
+        # office behind one address is never held up by them.
+        login_address:
+            policy: sliding_window
+            limit: 30
+            interval: '15 minutes'
+            cache_pool: kanso.rate_limiter
+        # Failed sign-ins across the installation: the same, from many
+        # addresses. Reaching it stops new sign-ins for everyone until the
+        # window moves on; sessions already open carry on.
+        login_total:
+            policy: sliding_window
+            limit: 300
+            interval: '15 minutes'
+            cache_pool: kanso.rate_limiter
+        # Refreshes with a token that is not valid, per client address.
+        refresh:
+            policy: sliding_window
+            limit: 30
             interval: '15 minutes'
             cache_pool: kanso.rate_limiter
         # Per API key. Generous (Pimsen's integration allowance): a limit tight
@@ -46,9 +71,15 @@ framework:
 when@dev:
     framework:
         rate_limiter:
+            # A development stack is signed into over and over from one
+            # address; a lockout there protects nothing.
             login:
-                # A development stack is signed into over and over from one
-                # address; a lockout there protects nothing.
+                limit: 10000
+            login_address:
+                limit: 10000
+            login_total:
+                limit: 10000
+            refresh:
                 limit: 10000
 
 when@test:
@@ -56,6 +87,13 @@ when@test:
         test: true
         cache:
             app: cache.adapter.array
+            pools:
+                # The suite's own Redis database (services.yaml), cleared as a
+                # run starts (tests/bootstrap.php): failures counted in one run
+                # must not throttle the next.
+                kanso.rate_limiter:
+                    adapter: cache.adapter.redis
+                    provider: '%env(REDIS_URL)%/%env(KANSO_TEST_REDIS_DB)%'
         lock: 'flock'
         rate_limiter:
             api_key:

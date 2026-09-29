@@ -13,7 +13,7 @@ Kanso uses **the same tech stack and deployment model as Pimsen** (`../pimsen`).
 - `backend/contracts/` — `kanso/contracts`, the public API customer extensions code against. Depends on nothing; strict semver.
 - `project/` — customer project skeleton (sample `AcmeBundle`). **Customer-specific code goes in project bundles, never in the core** (`docs/extensions.md`, ADR-0003).
 - `frontend/` — React app: `src/api` (client + Zod schemas), `src/app` (shell, router), `src/features/<area>`, `src/components/ui`, `src/lib` (incl. `i18n.jsx`).
-- `docker/`, `compose.yaml` — images and the reference deployment. The `proxy` routes `/` to the frontend, `/api` and `/health` to the API. Local port **8090** (Pimsen uses 8080).
+- `docker/`, `compose.yaml` — images and the reference deployment. The `proxy` (its own image, `docker/proxy/`) routes `/` to the frontend, `/api` and `/health/live` to the API, and sets the security headers and CSP (ADR-0018); `/health/ready` and `/metrics` are reachable on the API container only. Local port **8090** (Pimsen uses 8080).
 
 ## Scope rules
 - Build only what the current roadmap milestone needs. Later-milestone features (order routing, BOPIS, B2B, analytics) are out of scope unless explicitly asked for.

@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { NOTE_MAX_LENGTH, PAYMENT_STATUSES, useAddNote, useChangePaymentStatus, useChangeTags, useOrderTags } from '../../api/orders.js';
 import { Button, Card, ErrorNotice, Field, Input, Select } from '../../components/ui/primitives.jsx';
 import { useI18n } from '../../lib/i18n.jsx';
+import { useHoldLiveRefresh } from '../../lib/liveQuery.js';
 import { normalizeTag, PaymentBadge, TagList, useCanOperate } from './shared.jsx';
 
 /**
@@ -15,6 +16,8 @@ export function PaymentCard({ order }) {
   const change = useChangePaymentStatus(order.id);
   const [draft, setDraft] = useState(null);
   const value = draft ?? order.paymentStatus;
+  // A choice not yet saved holds the order still (useHoldLiveRefresh).
+  useHoldLiveRefresh({ queryKey: ['order', order.id], active: value !== order.paymentStatus });
 
   function submit(event) {
     event.preventDefault();

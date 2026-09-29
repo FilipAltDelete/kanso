@@ -167,7 +167,7 @@ describe('keyboard shortcuts on the order pages', () => {
       await waitFor(() => expect(router.state.location.pathname).toBe('/orders'));
     });
 
-    it('lists the order shortcuts on ?, and gives a viewer only print and back', async () => {
+    it('lists the order shortcuts on ?, and gives a viewer only back', async () => {
       answer();
       renderAt('/orders/o1', { user: viewer });
       await screen.findByRole('heading', { name: 'Order 10001' });
@@ -177,7 +177,7 @@ describe('keyboard shortcuts on the order pages', () => {
 
       press('?', document.body, { shiftKey: true });
       const section = within(screen.getByRole('dialog')).getByRole('region', { name: 'Order' });
-      expect(within(section).getAllByRole('term').map((term) => term.textContent)).toEqual(['Print the pick list', 'Back to the order list']);
+      expect(within(section).getAllByRole('term').map((term) => term.textContent)).toEqual(['Back to the order list']);
     });
   });
 });

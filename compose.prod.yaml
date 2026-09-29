@@ -24,3 +24,9 @@ services:
       target: web
     volumes: !reset []
     environment: !reset {}
+
+  # The image's strict Content Security Policy, not the dev server's. The
+  # proxy's PROXY_TRUSTED_PROXIES and the API's TRUSTED_PROXIES come from
+  # compose.yaml (README.md, "TLS and the proxy").
+  proxy:
+    volumes: !reset []

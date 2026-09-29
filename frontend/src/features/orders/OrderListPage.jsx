@@ -117,18 +117,18 @@ export function OrderListPage() {
   );
 
   const bulkActions = useMemo(
-    () => [
-      ...(canOperate
+    // All an operator's, printing included: asking for a document stores a
+    // row, a job and a file (ADR-0019). A viewer's list has nothing to select.
+    () =>
+      canOperate
         ? [
             { id: 'change-status', label: t('bulkTransition.open'), icon: ArrowRightLeft, onClick: ({ ids, rows, clear }) => setMoving({ ids, rows, clear }) },
             { id: 'add-tag', label: t('orders.bulk.addTag'), icon: Tag, onClick: ({ ids, clear }) => setTagging({ mode: 'add', ids, clear }) },
             { id: 'remove-tag', label: t('orders.bulk.removeTag'), icon: X, onClick: ({ ids, clear }) => setTagging({ mode: 'remove', ids, clear }) },
+            { id: 'print-pick-lists', label: t('bulkPrint.action.pick_list'), icon: Printer, onClick: ({ ids }) => setPrinting({ type: 'pick_list', ids }) },
+            { id: 'print-packing-slips', label: t('bulkPrint.action.packing_slip'), icon: FileText, onClick: ({ ids }) => setPrinting({ type: 'packing_slip', ids }) },
           ]
-        : []),
-      // Printing only reads orders, so anyone signed in may (ADR-0007).
-      { id: 'print-pick-lists', label: t('bulkPrint.action.pick_list'), icon: Printer, onClick: ({ ids }) => setPrinting({ type: 'pick_list', ids }) },
-      { id: 'print-packing-slips', label: t('bulkPrint.action.packing_slip'), icon: FileText, onClick: ({ ids }) => setPrinting({ type: 'packing_slip', ids }) },
-    ],
+        : [],
     [canOperate, t],
   );
 

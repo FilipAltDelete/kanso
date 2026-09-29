@@ -53,7 +53,7 @@ export function useOrderDetailShortcuts() {
     'order.edit': operate(click('[data-shortcut="edit"]')),
     'order.note': operate(focus('[data-shortcut="note"]')),
     'order.tag': operate(focus('[data-shortcut="tag"]')),
-    'order.print': click('[data-shortcut="print"]'),
+    'order.print': operate(click('[data-shortcut="print"]')),
     'order.back': () => navigate({ to: '/orders' }),
   });
 }

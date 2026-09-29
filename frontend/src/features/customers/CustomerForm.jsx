@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button, Card, Checkbox, Input, Select } from '../../components/ui/primitives.jsx';
 import { countryOptions } from '../../lib/countries.js';
+import { errorMessage } from '../../lib/errorMessage.js';
 import { useI18n } from '../../lib/i18n.jsx';
 
 const ADDRESS_FIELDS = ['name', 'company', 'line1', 'line2', 'postalCode', 'city', 'region', 'phone'];
@@ -135,7 +136,7 @@ export function CustomerForm({ initial, submitLabel, submitting, error, onSubmit
     <form onSubmit={handleSubmit} noValidate className="space-y-6">
       {error ? (
         <div ref={summaryRef} tabIndex={-1} role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          <p className="font-medium">{error.status === 422 ? t('form.fixErrors') : error.message}</p>
+          <p className="font-medium">{error.status === 422 ? t('form.fixErrors') : errorMessage(error, t)}</p>
           {unplaced.length ? (
             <ul className="mt-1 list-inside list-disc">
               {unplaced.map((violation) => (

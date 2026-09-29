@@ -152,13 +152,24 @@ final class DocumentApiTest extends WebTestCase
         self::assertSame('unknown_shipment', $this->json()['violations'][0]['code']);
     }
 
-    public function testAViewerMayPrint(): void
+    /** Asking for a document writes a row, a job and a file (ADR-0019); reading one does not. */
+    public function testAViewerMayReadADocumentButNotAskForOne(): void
     {
         $order = $this->createOrder();
 
         $this->request('POST', '/api/orders/'.$order['id'].'/documents', $this->viewer, ['type' => 'pick_list']);
+        self::assertResponseStatusCodeSame(403);
+        self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
 
-        self::assertResponseStatusCodeSame(202);
+        $this->request('POST', '/api/orders/bulk-documents', $this->viewer, ['type' => 'pick_list', 'orderIds' => [$order['id']]]);
+        self::assertResponseStatusCodeSame(403);
+        self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        self::assertSame(0, $this->work(), 'nothing was queued');
+
+        $queued = $this->requestDocument($order['id'], ['type' => 'pick_list']);
+        $this->request('GET', '/api/documents/'.$queued['id'], $this->viewer);
+        self::assertResponseIsSuccessful();
+        self::assertSame($queued['id'], $this->json()['id']);
     }
 
     public function testABadRequestIsAProblem(): void
@@ -205,7 +216,7 @@ final class DocumentApiTest extends WebTestCase
         $unknown = '0199aaaa-0000-7000-8000-00000000abcd';
 
         // Asked for out of order: the PDF goes by order number.
-        $result = $this->bulk(['type' => 'pick_list', 'locale' => 'sv', 'orderIds' => [$second['id'], $held['id'], $unknown, $first['id'], $cancelled['id']]], $this->viewer);
+        $result = $this->bulk(['type' => 'pick_list', 'locale' => 'sv', 'orderIds' => [$second['id'], $held['id'], $unknown, $first['id'], $cancelled['id']]]);
 
         $document = $result['document'];
         self::assertSame('queued', $document['status']);
@@ -216,7 +227,7 @@ final class DocumentApiTest extends WebTestCase
             $document['orders'],
         );
         self::assertMatchesRegularExpression('/^pick-lists-\d{8}-\d{4}\.pdf$/', $document['filename']);
-        self::assertSame('Vera Viewer', $document['requestedBy']['name']);
+        self::assertSame('Olle Operator', $document['requestedBy']['name']);
         self::assertSame(
             [[$held['id'], $held['number'], 'on_hold'], [$unknown, null, 'not_found'], [$cancelled['id'], $cancelled['number'], 'cancelled']],
             array_map(static fn (array $s): array => [$s['id'], $s['number'], $s['code']], $result['skipped']),

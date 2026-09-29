@@ -8,6 +8,7 @@ use Kanso\Core\Internal\Application\Exception\Conflict;
 use Kanso\Core\Internal\Application\Exception\NotFound;
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
 use Kanso\Core\Internal\Application\Order\OrderInput;
+use Kanso\Core\Internal\Application\Security\SecurityLog;
 use Kanso\Core\Internal\Domain\Common\TransactionInterface;
 use Kanso\Core\Internal\Domain\Security\PasswordHasherInterface;
 use Kanso\Core\Internal\Domain\Security\RefreshTokenStoreInterface;
@@ -22,6 +23,9 @@ use Psr\Clock\ClockInterface;
  * admins locked while it is checked. A deactivated user's sessions end at
  * once: access tokens are checked against the user on every request, and
  * refresh tokens are revoked.
+ *
+ * Changes to who may do what go to the security log, after they are saved.
+ * `$actorId` is the signed-in admin's id; null means the console.
  */
 final class UserService
 {
@@ -35,6 +39,7 @@ final class UserService
         private readonly ClockInterface $clock,
         private readonly TransactionInterface $transaction,
         private readonly RefreshTokenStoreInterface $refreshTokens,
+        private readonly SecurityLog $log,
     ) {
     }
 
@@ -69,6 +74,7 @@ final class UserService
         $user = new User($email, [] === $roles ? [Role::VIEWER] : array_values($roles), $name, $this->clock->now());
         $user->setPasswordHash($this->hasher->hash($password));
         $this->users->save($user);
+        $this->log->userCreated((string) $user->id(), $user->role(), null);
 
         return $user;
     }
@@ -79,7 +85,7 @@ final class UserService
      *
      * @param array<string, mixed> $input a request body, taken as sent
      */
-    public function createFromRequest(array $input): User
+    public function createFromRequest(array $input, ?string $actorId = null): User
     {
         $check = new OrderInput();
         $email = $this->email($check, $input['email'] ?? null);
@@ -92,6 +98,7 @@ final class UserService
         $user = new User($email, [$role], $name, $this->clock->now());
         $user->setPasswordHash($this->hasher->hash($password));
         $this->users->save($user);
+        $this->log->userCreated((string) $user->id(), $role, $actorId);
 
         return $user;
     }
@@ -101,9 +108,10 @@ final class UserService
      *
      * @param array<string, mixed> $input a request body, taken as sent
      */
-    public function update(string $id, array $input): User
+    public function update(string $id, array $input, ?string $actorId = null): User
     {
         $user = $this->get($id);
+        $before = $user->role();
         $check = new OrderInput();
         $email = \array_key_exists('email', $input) ? $this->email($check, $input['email'], $user) : $user->email();
         $name = \array_key_exists('name', $input) ? $check->text($input['name'], 'name', self::NAME_MAX, false) : $user->name();
@@ -111,16 +119,20 @@ final class UserService
         $check->throwIfInvalid();
         \assert(null !== $email && null !== $role);
 
-        return $this->transaction->run(function () use ($user, $email, $name, $role): User {
+        $this->transaction->run(function () use ($user, $email, $name, $role): void {
             if (Role::ADMIN !== $role) {
                 $this->keepAnAdmin($user, 'role', 'The last active admin cannot lose the admin role. Make someone else an admin first.');
             }
             $user->changeDetails($email, $name);
             $user->changeRole($role);
             $this->users->save($user);
-
-            return $user;
         });
+
+        if ($before !== $role) {
+            $this->log->roleChanged((string) $user->id(), $before, $role, $actorId);
+        }
+
+        return $user;
     }
 
     /**
@@ -136,6 +148,7 @@ final class UserService
             throw new Conflict('You cannot deactivate yourself.', [['path' => '', 'message' => 'You cannot deactivate yourself.', 'code' => 'self']]);
         }
 
+        $wasEnabled = $user->isEnabled();
         $this->transaction->run(function () use ($user): void {
             $this->keepAnAdmin($user, '', 'The last active admin cannot be deactivated. Make someone else an admin first.');
             $user->disable();
@@ -144,15 +157,22 @@ final class UserService
         // After the commit: a refresh in between is refused anyway, since it
         // checks that the user is enabled.
         $this->refreshTokens->revokeAllFor((string) $user->id());
+        if ($wasEnabled) {
+            $this->log->userDeactivated((string) $user->id(), $actorId);
+        }
 
         return $user;
     }
 
-    public function activate(string $id): User
+    public function activate(string $id, ?string $actorId = null): User
     {
         $user = $this->get($id);
+        $wasEnabled = $user->isEnabled();
         $user->enable();
         $this->users->save($user);
+        if (!$wasEnabled) {
+            $this->log->userActivated((string) $user->id(), $actorId);
+        }
 
         return $user;
     }
@@ -161,7 +181,7 @@ final class UserService
      * An admin sets someone's password, for a forgotten one; their sessions
      * end, so whoever had them signs in with the new one.
      */
-    public function setPassword(string $id, mixed $password): User
+    public function setPassword(string $id, mixed $password, ?string $actorId = null): User
     {
         $user = $this->get($id);
         $check = new OrderInput();
@@ -172,6 +192,7 @@ final class UserService
         $user->setPasswordHash($this->hasher->hash($password));
         $this->users->save($user);
         $this->refreshTokens->revokeAllFor((string) $user->id());
+        $this->log->passwordChanged((string) $user->id(), $actorId);
 
         return $user;
     }

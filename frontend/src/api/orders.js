@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { useLiveQuery } from '../lib/liveQuery.js';
 import { api } from './client.js';
 
 export const ORDER_STATUSES = ['pending', 'confirmed', 'allocated', 'picking', 'packed', 'shipped', 'delivered', 'cancelled', 'on_hold'];
@@ -160,10 +161,11 @@ export function orderListQuery(view) {
   return params.toString();
 }
 
+/** The order list; it keeps itself up to date while on screen (lib/liveQuery.js). */
 export function useOrders(view) {
   const query = orderListQuery(view);
 
-  return useQuery({
+  return useLiveQuery({
     queryKey: ['orders', query],
     queryFn: async ({ signal }) => orderPageSchema.parse(await api(`/api/orders?${query}`, { signal })),
     // Keep the rows on screen while the next page or sort loads.
@@ -180,8 +182,9 @@ export function useCustomerOrders(customerId) {
   });
 }
 
+/** One order; it keeps itself up to date while on screen, and holds still under a form that saves with its version. */
 export function useOrder(id) {
-  return useQuery({
+  return useLiveQuery({
     queryKey: ['order', id],
     queryFn: async ({ signal }) => orderSchema.parse(await api(`/api/orders/${encodeURIComponent(id)}`, { signal })),
   });

@@ -126,7 +126,7 @@ export function CreateOrderPage() {
         <Field label={t('order.channel')} error={errors.channel}>
           {(props) => (
             <Select {...props} value={channel} onChange={(event) => setChannel(event.target.value)}>
-              {(channels.data ?? [{ code: 'manual', name: 'Manual' }]).map((option) => (
+              {(channels.data ?? [{ code: 'manual', name: t('orderForm.manualChannel') }]).map((option) => (
                 <option key={option.code} value={option.code}>
                   {option.name}
                 </option>

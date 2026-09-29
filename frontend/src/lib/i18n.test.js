@@ -1,8 +1,17 @@
-import { messages, translate } from './i18n.jsx';
+import { essentials, translate } from './i18n.jsx';
+import en from './messages/en.js';
+import sv from './messages/sv.js';
+
+const messages = { en, sv };
 
 describe('i18n', () => {
   it('has the same keys in every language', () => {
     expect(Object.keys(messages.sv).sort()).toEqual(Object.keys(messages.en).sort());
+    expect(Object.keys(essentials.sv).sort()).toEqual(Object.keys(essentials.en).sort());
+  });
+
+  it('keeps each key in one place: the catalogs or the essentials, not both', () => {
+    expect(Object.keys(essentials.en).filter((key) => key in messages.en)).toEqual([]);
   });
 
   it('falls back to English, then to the key', () => {

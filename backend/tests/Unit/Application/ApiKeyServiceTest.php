@@ -6,6 +6,7 @@ namespace Kanso\Core\Tests\Unit\Application;
 
 use Kanso\Core\Internal\Application\Exception\ValidationFailed;
 use Kanso\Core\Internal\Application\Security\ApiKeyService;
+use Kanso\Core\Internal\Application\Security\SecurityLog;
 use Kanso\Core\Internal\Domain\Common\Page;
 use Kanso\Core\Internal\Domain\Common\PageRequest;
 use Kanso\Core\Internal\Domain\Security\ApiKey;
@@ -13,6 +14,9 @@ use Kanso\Core\Internal\Domain\Security\ApiKeyStoreInterface;
 use Kanso\Core\Internal\Domain\User\Role;
 use Kanso\Core\Internal\Domain\User\User;
 use Kanso\Core\Internal\Domain\User\UserStoreInterface;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
+use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 
@@ -22,6 +26,7 @@ final class ApiKeyServiceTest extends TestCase
     private User $admin;
     private ApiKeyStoreInterface $keys;
     private ApiKeyService $service;
+    private TestHandler $log;
 
     protected function setUp(): void
     {
@@ -96,7 +101,8 @@ final class ApiKeyServiceTest extends TestCase
             }
         };
 
-        $this->service = new ApiKeyService($keys, $users, $this->clock);
+        $this->log = new TestHandler();
+        $this->service = new ApiKeyService($keys, $users, $this->clock, new SecurityLog(new Logger('kanso_security', [$this->log])));
     }
 
     public function testCreateReturnsThePlainKeyOnceAndStoresItsHash(): void
@@ -169,6 +175,24 @@ final class ApiKeyServiceTest extends TestCase
     public function testTheCreatorMustExist(): void
     {
         $this->assertViolation('unknown_user', fn () => $this->service->create('x', Role::VIEWER, null, 'nobody@example.com'));
+    }
+
+    public function testCreatingAndRevokingAreLoggedByIdNeverByKey(): void
+    {
+        ['key' => $key, 'plainKey' => $plainKey] = $this->service->create('Shopify sync', Role::OPERATOR, null, 'admin@example.com');
+        $this->service->revoke((string) $key->id(), (string) $this->admin->id());
+        $this->service->revoke((string) $key->id(), (string) $this->admin->id());
+        $console = $this->service->create('From the console', Role::VIEWER)['key'];
+
+        self::assertSame([
+            ['api_key_created', (string) $key->id(), (string) $this->admin->id()],
+            ['api_key_revoked', (string) $key->id(), (string) $this->admin->id()],
+            ['api_key_created', (string) $console->id(), null],
+        ], array_map(static fn (LogRecord $r): array => [$r->context['event'], $r->context['api_key_id'], $r->context['actor_id']], $this->log->getRecords()), 'revoking twice is logged once');
+
+        $logged = json_encode(array_map(static fn (LogRecord $r): array => $r->toArray(), $this->log->getRecords()), \JSON_THROW_ON_ERROR);
+        self::assertStringNotContainsString($plainKey, $logged);
+        self::assertStringNotContainsString($key->keyHash(), $logged);
     }
 
     public function testRevokeKeepsTheFirstRevocationTime(): void

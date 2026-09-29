@@ -5,9 +5,10 @@ import { LanguageSelect } from '../../app/LanguageSelect.jsx';
 import { useAuth } from './AuthProvider.jsx';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, expired } = useAuth();
   const { t } = useI18n();
-  const [email, setEmail] = useState('');
+  // After a session ran out, the same person most likely signs in again.
+  const [email, setEmail] = useState(expired?.email ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +38,12 @@ export function LoginPage() {
           <LanguageSelect />
         </div>
 
+        {expired ? (
+          <p role="status" className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {t('auth.sessionExpired')}
+          </p>
+        ) : null}
+
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700" htmlFor="email">
@@ -46,9 +53,10 @@ export function LoginPage() {
               id="email"
               name="email"
               autoComplete="username"
-              // The form is the only thing on the page, so focusing it helps.
+              // The form is the only thing on the page, so focusing it helps;
+              // the password, when the email is filled in already.
               // eslint-disable-next-line jsx-a11y/no-autofocus
-              autoFocus
+              autoFocus={!expired}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
@@ -63,6 +71,8 @@ export function LoginPage() {
               name="password"
               type="password"
               autoComplete="current-password"
+              // eslint-disable-next-line jsx-a11y/no-autofocus
+              autoFocus={Boolean(expired)}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
