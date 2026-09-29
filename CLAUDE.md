@@ -4,7 +4,7 @@ A **web-based Order Management System** for e-commerce and retail merchants. It 
 
 Kanso uses **the same tech stack and deployment model as Pimsen** (`../pimsen`). When a stack or infrastructure question comes up, follow Pimsen's choices and ADRs (`../pimsen/docs/06-decisions.md`, `../pimsen/docs/tech-stack/`) unless a Kanso ADR says otherwise.
 
-- Roadmap: `ROADMAP.md` — **current phase: Phase 1 (MVP, core order flow)**; Phase 0 is done; the deploy target and automatic deploys are deferred (status in each phase's section there)
+- Roadmap: `ROADMAP.md` — milestones M1–M9 in dependency order, listing what Kanso lacks; **current milestone: M1 (Harden and ship what exists)**. "Phase N" in ADRs and code comments refers to the previous roadmap (mapping at the end of `ROADMAP.md`)
 - Decisions: `docs/adr/` · Domain model draft: `docs/domain-model.md` · Setup: `README.md`
 - Spec: `docs/OMS-SPEC.md` (not yet generated — see `docs/prompts/oms-spec-prompt.md`)
 
@@ -16,7 +16,7 @@ Kanso uses **the same tech stack and deployment model as Pimsen** (`../pimsen`).
 - `docker/`, `compose.yaml` — images and the reference deployment. The `proxy` routes `/` to the frontend, `/api` and `/health` to the API. Local port **8090** (Pimsen uses 8080).
 
 ## Scope rules
-- Build only what the current roadmap phase needs. Later-phase features (order routing, BOPIS, B2B, analytics) are out of scope unless explicitly asked for.
+- Build only what the current roadmap milestone needs. Later-milestone features (order routing, BOPIS, B2B, analytics) are out of scope unless explicitly asked for.
 - Kanso is an OMS, not a WMS, ERP, or storefront — integrate with those systems, don't rebuild them.
 - If a request conflicts with `ROADMAP.md`, point out the conflict before implementing.
 
